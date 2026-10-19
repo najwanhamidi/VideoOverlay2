@@ -132,6 +132,11 @@ const state = {
     widgetBgStyles: {},
     // Sub-Element Offsets & Z-depth per widget (move individual text, icons, graphs X, Y, Z)
     widgetElementOffsets: {},
+    // Snap to Grid Configuration (New User Requirement)
+    snapToGrid: false,
+    gridSize: 20,
+    showGridOverlay: false,
+    isDraggingGrid: false,
   },
   export: {
     scale: 2, // 2X Ultra crisp default
@@ -341,12 +346,47 @@ function syncAllControlsWithConfig() {
   if (splitWidgetTitleInput) splitWidgetTitleInput.value = cfg.splitCustomTitle || '';
 
   if (cfg.splitColumns) {
-    Object.entries(cfg.splitColumns).forEach(([colKey, val]) => {
-      const capKey = colKey.charAt(0).toUpperCase() + colKey.slice(1);
-      const el = document.getElementById('splitCol' + capKey);
-      if (el) el.checked = !!val;
+    const colIdMap = {
+      time: 'colSplitTime',
+      pace: 'colSplitPace',
+      delta: 'colSplitDelta',
+      avgHr: 'colSplitAvgHr',
+      maxHr: 'colSplitMaxHr',
+      minHr: 'colSplitMinHr',
+      cadence: 'colSplitCadence',
+      elevation: 'colSplitElev',
+    };
+    Object.entries(colIdMap).forEach(([colKey, elId]) => {
+      const el = document.getElementById(elId);
+      if (el) el.checked = cfg.splitColumns[colKey] !== false;
     });
   }
+
+  // Snap to Grid sync
+  const snapToGridVal = !!cfg.snapToGrid;
+  const gridSizeVal = cfg.gridSize || 20;
+  const showGridOverlayVal = !!cfg.showGridOverlay;
+
+  const snapBtn = document.getElementById('toggleSnapToGridBtn');
+  if (snapBtn) {
+    snapBtn.textContent = snapToGridVal ? `🧲 Snap: ON (${gridSizeVal}px)` : '🧲 Snap: OFF';
+    snapBtn.classList.toggle('btn-toggle-active', snapToGridVal);
+  }
+  const snapBadge = document.getElementById('snapGridStatusBadge');
+  if (snapBadge) {
+    snapBadge.textContent = snapToGridVal ? `ON (${gridSizeVal}px)` : 'OFF';
+    snapBadge.style.color = snapToGridVal ? 'var(--accent-volt)' : 'var(--text-muted)';
+  }
+  const snapCb = document.getElementById('snapToGridCheckbox');
+  if (snapCb) snapCb.checked = snapToGridVal;
+  const snapTbSize = document.getElementById('snapGridToolbarSize');
+  if (snapTbSize) snapTbSize.value = gridSizeVal;
+  const snapNum = document.getElementById('snapGridSizeNumber');
+  if (snapNum) snapNum.value = gridSizeVal;
+  const snapSlider = document.getElementById('snapGridSizeSlider');
+  if (snapSlider) snapSlider.value = gridSizeVal;
+  const showGridCb = document.getElementById('showGridOverlayCheckbox');
+  if (showGridCb) showGridCb.checked = showGridOverlayVal;
 
   // 8. Text Tab and Activity Inputs
   syncInputsWithActivity(state.currentActivity);
@@ -574,9 +614,12 @@ function setupUndoRedoControls() {
   updateUndoRedoButtons();
 }
 
+let arrowKeyUndoTimer = null;
+let arrowKeyGridTimer = null;
+
 function setupKeyboardShortcuts() {
   window.addEventListener('keydown', (e) => {
-    const isInputActive = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
+    const isInputActive = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName) || document.activeElement?.isContentEditable;
 
     // Ctrl+Z / Cmd+Z for Undo
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
@@ -603,6 +646,7 @@ function setupKeyboardShortcuts() {
         e.preventDefault();
         deleteSelectedTarget(state.selectedWidget);
       }
+      return;
     }
 
     // Spacebar to toggle Play/Pause Run Animation (when not typing in an input/textarea)
@@ -610,6 +654,113 @@ function setupKeyboardShortcuts() {
       if (videoAnimator) {
         e.preventDefault();
         videoAnimator.togglePlay();
+      }
+      return;
+    }
+
+    // Keyboard Arrow Keys: Move / Nudge selected widget by a grid
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && !isInputActive) {
+      if (state.selectedWidget) {
+        e.preventDefault();
+
+        // Push undo snapshot (debounced so rapid arrow key presses create a single undo step)
+        if (!arrowKeyUndoTimer) {
+          pushUndoSnapshot();
+        }
+        clearTimeout(arrowKeyUndoTimer);
+        arrowKeyUndoTimer = setTimeout(() => {
+          arrowKeyUndoTimer = null;
+        }, 400);
+
+        const dx = e.key === 'ArrowRight' ? 1 : (e.key === 'ArrowLeft' ? -1 : 0);
+        const dy = e.key === 'ArrowDown' ? 1 : (e.key === 'ArrowUp' ? -1 : 0);
+
+        const g = state.config.gridSize || 20;
+        let step = g;
+        if (e.shiftKey) step = g * 5;
+        if (e.altKey) step = 1;
+
+        const subPartSelect = document.getElementById('inspectorSubPartSelect');
+        const currentPart = subPartSelect ? subPartSelect.value : 'widget';
+
+        if (currentPart && currentPart !== 'widget' && currentPart !== 'bg') {
+          // Move selected sub-element
+          if (!state.config.widgetElementOffsets) state.config.widgetElementOffsets = {};
+          if (!state.config.widgetElementOffsets[state.selectedWidget]) state.config.widgetElementOffsets[state.selectedWidget] = {};
+          if (!state.config.widgetElementOffsets[state.selectedWidget][currentPart]) {
+            state.config.widgetElementOffsets[state.selectedWidget][currentPart] = { x: 0, y: 0, z: 1 };
+          }
+          const off = state.config.widgetElementOffsets[state.selectedWidget][currentPart];
+          const moveStep = e.altKey ? 1 : (e.shiftKey ? 10 : 5);
+          off.x = (off.x || 0) + dx * moveStep;
+          off.y = (off.y || 0) + dy * moveStep;
+          triggerRender();
+          if (window.syncInspectorWithSelectedElement) {
+            window.syncInspectorWithSelectedElement(state.selectedWidget, currentPart);
+          }
+        } else if (state.selectedWidget === '__bg_photo__') {
+          state.config.photoPanX = (state.config.photoPanX || 0) + dx * step;
+          state.config.photoPanY = (state.config.photoPanY || 0) + dy * step;
+          triggerRender();
+          if (window.syncInspectorWithSelectedElement) {
+            window.syncInspectorWithSelectedElement('__bg_photo__');
+          }
+        } else if (state.selectedWidget.endsWith('_bg')) {
+          const baseKey = state.selectedWidget.replace(/_bg$/, '');
+          if (!state.config.widgetBgStyles) state.config.widgetBgStyles = {};
+          if (!state.config.widgetBgStyles[baseKey]) state.config.widgetBgStyles[baseKey] = {};
+          const bg = state.config.widgetBgStyles[baseKey];
+          let curX = bg.offsetX || 0;
+          let curY = bg.offsetY || 0;
+          if (state.config.snapToGrid && !e.altKey) {
+            curX = (Math.round(curX / g) + dx * Math.max(1, Math.round(step / g))) * g;
+            curY = (Math.round(curY / g) + dy * Math.max(1, Math.round(step / g))) * g;
+          } else {
+            curX += dx * step;
+            curY += dy * step;
+          }
+          bg.offsetX = curX;
+          bg.offsetY = curY;
+          triggerRender();
+          if (window.syncInspectorWithSelectedElement) {
+            window.syncInspectorWithSelectedElement(baseKey, 'bg');
+          }
+        } else {
+          const b = renderer.widgetBounds ? renderer.widgetBounds[state.selectedWidget] : null;
+          if (!state.config.widgetPositions) state.config.widgetPositions = {};
+          const cur = state.config.widgetPositions[state.selectedWidget] || (b ? { x: b.x, y: b.y, width: b.width, height: b.height } : { x: 0, y: 0, width: 200, height: 100 });
+          let curX = cur.x !== undefined ? cur.x : (b ? b.x : 0);
+          let curY = cur.y !== undefined ? cur.y : (b ? b.y : 0);
+          if (state.config.snapToGrid && !e.altKey) {
+            curX = (Math.round(curX / g) + dx * Math.max(1, Math.round(step / g))) * g;
+            curY = (Math.round(curY / g) + dy * Math.max(1, Math.round(step / g))) * g;
+          } else {
+            curX += dx * step;
+            curY += dy * step;
+          }
+          state.config.widgetPositions[state.selectedWidget] = {
+            ...cur,
+            x: curX,
+            y: curY
+          };
+          if (state.config.snapToGrid) {
+            state.config.isDraggingGrid = true;
+            clearTimeout(arrowKeyGridTimer);
+            arrowKeyGridTimer = setTimeout(() => {
+              state.config.isDraggingGrid = false;
+              triggerRender();
+            }, 350);
+          }
+          triggerRender();
+          if (window.syncInspectorWithSelectedElement) {
+            window.syncInspectorWithSelectedElement(state.selectedWidget, 'widget');
+          }
+        }
+
+        updateGizmoBox();
+        if (typeof updateFloatingToolbarPosition === 'function') {
+          updateFloatingToolbarPosition();
+        }
       }
     }
   });
@@ -779,6 +930,7 @@ function init() {
   window.state = state;
   window.renderer = renderer;
   window.selectWidget = selectWidget;
+  window.centerWidget = centerWidget;
   window.triggerRender = triggerRender;
   triggerRender();
 }
@@ -1468,6 +1620,11 @@ function extractTemplateConfig(cfg) {
     widgetBgStyles: cfg.widgetBgStyles ? JSON.parse(JSON.stringify(cfg.widgetBgStyles)) : {},
     widgetElementOffsets: cfg.widgetElementOffsets ? JSON.parse(JSON.stringify(cfg.widgetElementOffsets)) : {},
     elementStyles: cfg.elementStyles ? JSON.parse(JSON.stringify(cfg.elementStyles)) : {},
+
+    // Snap to Grid
+    snapToGrid: !!cfg.snapToGrid,
+    gridSize: cfg.gridSize || 20,
+    showGridOverlay: !!cfg.showGridOverlay,
   };
 }
 
@@ -1818,13 +1975,101 @@ function setupSplitsControls() {
   colBinds.forEach(({ id, key }) => {
     const cb = document.getElementById(id);
     if (cb) {
-      cb.checked = !!state.config.splitColumns[key];
+      cb.checked = state.config.splitColumns[key] !== false;
       cb.addEventListener('change', (e) => {
         state.config.splitColumns[key] = e.target.checked;
+        if (state.selectedWidget && state.selectedWidget.startsWith('splits_')) {
+          const inst = state.config.extraWidgetInstances?.find((i) => i.id === state.selectedWidget);
+          if (inst) {
+            if (!inst.options) inst.options = {};
+            if (!inst.options.splitColumns) inst.options.splitColumns = { ...state.config.splitColumns };
+            inst.options.splitColumns[key] = e.target.checked;
+          }
+        }
         triggerRender();
       });
     }
   });
+
+  // Snap to Grid Controls & Listeners (New User Requirement)
+  const updateSnapToGridUI = (enabled, size, showGrid) => {
+    state.config.snapToGrid = !!enabled;
+    if (size !== undefined && size !== null) {
+      state.config.gridSize = Math.max(2, Math.min(200, parseInt(size, 10) || 20));
+    }
+    if (showGrid !== undefined) state.config.showGridOverlay = !!showGrid;
+
+    const gSize = state.config.gridSize || 20;
+    const snapBtn = document.getElementById('toggleSnapToGridBtn');
+    if (snapBtn) {
+      snapBtn.textContent = state.config.snapToGrid ? `🧲 Snap: ON (${gSize}px)` : '🧲 Snap: OFF';
+      snapBtn.classList.toggle('btn-toggle-active', state.config.snapToGrid);
+    }
+    const snapBadge = document.getElementById('snapGridStatusBadge');
+    if (snapBadge) {
+      snapBadge.textContent = state.config.snapToGrid ? `ON (${gSize}px)` : 'OFF';
+      snapBadge.style.color = state.config.snapToGrid ? 'var(--accent-volt)' : 'var(--text-muted)';
+    }
+    const snapCb = document.getElementById('snapToGridCheckbox');
+    if (snapCb) snapCb.checked = state.config.snapToGrid;
+    const snapTbSize = document.getElementById('snapGridToolbarSize');
+    if (snapTbSize) snapTbSize.value = gSize;
+    const snapNum = document.getElementById('snapGridSizeNumber');
+    if (snapNum) snapNum.value = gSize;
+    const snapSlider = document.getElementById('snapGridSizeSlider');
+    if (snapSlider) snapSlider.value = gSize;
+    const showGridCb = document.getElementById('showGridOverlayCheckbox');
+    if (showGridCb) showGridCb.checked = !!state.config.showGridOverlay;
+
+    triggerRender();
+  };
+
+  const toggleSnapBtn = document.getElementById('toggleSnapToGridBtn');
+  if (toggleSnapBtn) {
+    toggleSnapBtn.addEventListener('click', () => {
+      const next = !state.config.snapToGrid;
+      updateSnapToGridUI(next, state.config.gridSize, state.config.showGridOverlay);
+      showToast(next ? `Snap to Grid: ON (${state.config.gridSize}px)` : 'Snap to Grid: OFF');
+    });
+  }
+
+  const snapCb = document.getElementById('snapToGridCheckbox');
+  if (snapCb) {
+    snapCb.addEventListener('change', (e) => {
+      updateSnapToGridUI(e.target.checked, state.config.gridSize, state.config.showGridOverlay);
+      showToast(e.target.checked ? `Snap to Grid: ON (${state.config.gridSize}px)` : 'Snap to Grid: OFF');
+    });
+  }
+
+  const handleGridSizeInput = (val) => {
+    const s = Math.max(2, Math.min(200, parseInt(val, 10) || 20));
+    updateSnapToGridUI(state.config.snapToGrid, s, state.config.showGridOverlay);
+  };
+
+  const snapTbSize = document.getElementById('snapGridToolbarSize');
+  if (snapTbSize) snapTbSize.addEventListener('input', (e) => handleGridSizeInput(e.target.value));
+
+  const snapNum = document.getElementById('snapGridSizeNumber');
+  if (snapNum) snapNum.addEventListener('input', (e) => handleGridSizeInput(e.target.value));
+
+  const snapSlider = document.getElementById('snapGridSizeSlider');
+  if (snapSlider) snapSlider.addEventListener('input', (e) => handleGridSizeInput(e.target.value));
+
+  document.querySelectorAll('.grid-preset-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const s = parseInt(btn.dataset.grid, 10);
+      updateSnapToGridUI(true, s, state.config.showGridOverlay);
+      showToast(`Grid size set to ${s}px (Snap enabled)`);
+    });
+  });
+
+  const showGridCb = document.getElementById('showGridOverlayCheckbox');
+  if (showGridCb) {
+    showGridCb.addEventListener('change', (e) => {
+      state.config.showGridOverlay = e.target.checked;
+      triggerRender();
+    });
+  }
 
   // Fastest Split Highlight Toggle (New User Requirement)
   const toggleFastest = document.getElementById('toggleFastestSplitHighlight');
@@ -3026,7 +3271,14 @@ function setupElementInspectorControls() {
       { key: 'title', label: 'Split Header Title' },
       { key: 'badge', label: 'Fastest Split Highlight Pill' },
       { key: 'lapLabels', label: 'All Lap Labels (L1, L2, KM 1...)' },
-      { key: 'paceLabels', label: 'All Split Paces (Pace Readouts)' },
+      { key: 'pace', label: 'All Split Paces (Pace Readouts)' },
+      { key: 'avgHr', label: 'All Split Heart Rates (♥ / HR Readouts)' },
+      { key: 'time', label: 'All Split Times (Duration Readouts)' },
+      { key: 'delta', label: 'All Split Deltas (+/- Pace Readouts)' },
+      { key: 'elevation', label: 'All Split Elevations (Gain/Loss Readouts)' },
+      { key: 'cadence', label: 'All Split Cadences (SPM Readouts)' },
+      { key: 'maxHr', label: 'All Split Max HR Readouts' },
+      { key: 'minHr', label: 'All Split Min HR Readouts' },
       { key: 'bars', label: 'All Split Bars / Columns' },
       { key: 'headerSplit', label: 'Column Header: Split' },
       { key: 'headerTime', label: 'Column Header: Time' },
@@ -3151,6 +3403,11 @@ function setupElementInspectorControls() {
         base.push(
           { key: `split_lap_${idx}`, label: `Split ${idx + 1} Lap Label (${sName})` },
           { key: `split_pace_${idx}`, label: `Split ${idx + 1} Pace Text (${pStr})` },
+          { key: `split_avgHr_${idx}`, label: `Split ${idx + 1} Heart Rate (HR)` },
+          { key: `split_time_${idx}`, label: `Split ${idx + 1} Time` },
+          { key: `split_delta_${idx}`, label: `Split ${idx + 1} Delta` },
+          { key: `split_elevation_${idx}`, label: `Split ${idx + 1} Elevation` },
+          { key: `split_cadence_${idx}`, label: `Split ${idx + 1} Cadence` },
           { key: `split_bar_${idx}`, label: `Split ${idx + 1} Bar / Column (${sName})` },
           { key: `split_${idx}`, label: `Split ${idx + 1} Entire Item (${sName})` }
         );
@@ -5347,6 +5604,10 @@ function setupGizmoController() {
         dragInitialPos = { ...(state.config.widgetPositions[state.selectedWidget] || b) };
       }
       isInteracting = true;
+      if (state.config.snapToGrid) {
+        state.config.isDraggingGrid = true;
+        triggerRender();
+      }
     };
 
     h.addEventListener('mousedown', (e) => {
@@ -5390,38 +5651,48 @@ function setupGizmoController() {
       return;
     }
 
+    const snapVal = (val, size) => {
+      if (!state.config.snapToGrid || !size || size <= 1) return Math.round(val);
+      return Math.round(val / size) * size;
+    };
+    const g = state.config.gridSize || 20;
+
     if (activeDragMode === 'move') {
       if (state.selectedWidget.endsWith('_bg')) {
         const baseKey = state.selectedWidget.replace(/_bg$/, '');
         if (!state.config.widgetBgStyles) state.config.widgetBgStyles = {};
         if (!state.config.widgetBgStyles[baseKey]) state.config.widgetBgStyles[baseKey] = {};
         const cur = state.config.widgetBgStyles[baseKey];
-        cur.offsetX = Math.round(dragInitialPos.offsetX + deltaX);
-        cur.offsetY = Math.round(dragInitialPos.offsetY + deltaY);
+        cur.offsetX = snapVal(dragInitialPos.offsetX + deltaX, g);
+        cur.offsetY = snapVal(dragInitialPos.offsetY + deltaY, g);
+        state.config.isDraggingGrid = state.config.snapToGrid;
         triggerRender();
       } else {
-        const newX = Math.round(dragInitialPos.x + deltaX);
-        const newY = Math.round(dragInitialPos.y + deltaY);
+        const newX = snapVal(dragInitialPos.x + deltaX, g);
+        const newY = snapVal(dragInitialPos.y + deltaY, g);
         state.config.widgetPositions[state.selectedWidget] = {
           ...dragInitialPos,
           x: newX,
           y: newY,
         };
+        state.config.isDraggingGrid = state.config.snapToGrid;
         triggerRender();
       }
     } else if (activeDragMode === 'resize') {
       let { x, y, width, height } = dragInitialPos;
 
-      if (activeHandle.includes('e')) width = Math.max(30, Math.round(dragInitialPos.width + deltaX));
-      if (activeHandle.includes('s')) height = Math.max(20, Math.round(dragInitialPos.height + deltaY));
+      if (activeHandle.includes('e')) width = Math.max(g, snapVal(dragInitialPos.width + deltaX, g));
+      if (activeHandle.includes('s')) height = Math.max(g, snapVal(dragInitialPos.height + deltaY, g));
       if (activeHandle.includes('w')) {
-        const nw = Math.max(30, Math.round(dragInitialPos.width - deltaX));
-        x = dragInitialPos.x + (dragInitialPos.width - nw);
+        const rawW = dragInitialPos.width - deltaX;
+        const nw = Math.max(g, snapVal(rawW, g));
+        x = snapVal(dragInitialPos.x + (dragInitialPos.width - nw), g);
         width = nw;
       }
       if (activeHandle.includes('n')) {
-        const nh = Math.max(20, Math.round(dragInitialPos.height - deltaY));
-        y = dragInitialPos.y + (dragInitialPos.height - nh);
+        const rawH = dragInitialPos.height - deltaY;
+        const nh = Math.max(g, snapVal(rawH, g));
+        y = snapVal(dragInitialPos.y + (dragInitialPos.height - nh), g);
         height = nh;
       }
 
@@ -5439,9 +5710,11 @@ function setupGizmoController() {
         cur.offsetY = Math.round(y - baseY);
         cur.widthDelta = Math.round(width - baseW);
         cur.heightDelta = Math.round(height - baseH);
+        state.config.isDraggingGrid = state.config.snapToGrid;
         triggerRender();
       } else {
         state.config.widgetPositions[state.selectedWidget] = { x, y, width, height };
+        state.config.isDraggingGrid = state.config.snapToGrid;
         triggerRender();
       }
     }
@@ -5452,6 +5725,10 @@ function setupGizmoController() {
       isInteracting = false;
       activeDragMode = null;
       activeHandle = null;
+      if (state.config.isDraggingGrid) {
+        state.config.isDraggingGrid = false;
+        triggerRender();
+      }
     }
   };
 
@@ -5544,6 +5821,10 @@ function startDragMove(clientX, clientY) {
     dragInitialPos = { ...(state.config.widgetPositions[state.selectedWidget] || b) };
   }
   isInteracting = true;
+  if (state.config.snapToGrid) {
+    state.config.isDraggingGrid = true;
+    triggerRender();
+  }
 }
 
 function selectWidget(key) {
@@ -5670,7 +5951,11 @@ function centerWidget(key) {
   const b = renderer.widgetBounds[key];
   if (!b) return;
   const cur = state.config.widgetPositions[key] || b;
-  const newX = Math.round((canvas.width - cur.width) / 2);
+  let newX = Math.round((canvas.width - cur.width) / 2);
+  if (state.config.snapToGrid) {
+    const g = state.config.gridSize || 20;
+    newX = Math.round(newX / g) * g;
+  }
   state.config.widgetPositions[key] = { ...cur, x: newX };
   triggerRender();
   showToast('Centered widget horizontally');
