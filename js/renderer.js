@@ -850,7 +850,9 @@ export class OverlayRenderer {
 
     // 4. Secondary Metrics Grid
     if (config.showWidgetMetrics !== false) {
-      const pos = this.getWidgetPos(config, 'metrics', pad, currY, w - pad * 2, 80);
+      const isVertMet = ['vertical-stacked-hud', 'vertical-minimal-stack', 'vertical-pill-stack', 'vertical-timeline-flow', 'vertical-data-ladder', 'vertical-athletic-cards'].includes(config.metricsDesign);
+      const defaultMetH = isVertMet ? 220 : ((config.metricsDesign === 'cards-2col' || config.metricsDesign === 'centered-cross-quad') ? 140 : 80);
+      const pos = this.getWidgetPos(config, 'metrics', pad, currY, w - pad * 2, defaultMetH);
       const nextY = this.drawMetricsGrid(ctx, pos.x, pos.y, pos.width, activity, config, theme, accent, 3, pos.height);
       if (!pos.isCustom) currY = nextY + 16;
     }
@@ -1004,7 +1006,9 @@ export class OverlayRenderer {
     const posHero = this.getWidgetPos(config, 'hero', pad, currY, w - pad * 2, 105);
     currY = this.drawHeroStat(ctx, posHero.x, posHero.y, posHero.width, activity, config, theme, accent, posHero.height) + 12;
 
-    const posMet = this.getWidgetPos(config, 'metrics', pad, currY, w - pad * 2, 80);
+    const isVertMet = ['vertical-stacked-hud', 'vertical-minimal-stack', 'vertical-pill-stack', 'vertical-timeline-flow', 'vertical-data-ladder', 'vertical-athletic-cards'].includes(config.metricsDesign);
+    const defaultMetH = isVertMet ? 220 : ((config.metricsDesign === 'cards-2col' || config.metricsDesign === 'centered-cross-quad') ? 140 : 80);
+    const posMet = this.getWidgetPos(config, 'metrics', pad, currY, w - pad * 2, defaultMetH);
     currY = this.drawMetricsGrid(ctx, posMet.x, posMet.y, posMet.width, activity, config, theme, accent, 3, posMet.height) + 12;
 
     // Pace Graph & Heart Rate Graph
@@ -1060,7 +1064,9 @@ export class OverlayRenderer {
     currY = this.drawHeroStat(ctx, posHero.x, posHero.y, posHero.width, activity, config, theme, accent, posHero.height) + 16;
 
     // Metrics Strip
-    const posMet = this.getWidgetPos(config, 'metrics', pad, currY, w - pad * 2, 80);
+    const isVertMet = ['vertical-stacked-hud', 'vertical-minimal-stack', 'vertical-pill-stack', 'vertical-timeline-flow', 'vertical-data-ladder', 'vertical-athletic-cards'].includes(config.metricsDesign);
+    const defaultMetH = isVertMet ? 220 : ((config.metricsDesign === 'cards-2col' || config.metricsDesign === 'centered-cross-quad') ? 140 : 80);
+    const posMet = this.getWidgetPos(config, 'metrics', pad, currY, w - pad * 2, defaultMetH);
     currY = this.drawMetricsGrid(ctx, posMet.x, posMet.y, posMet.width, activity, config, theme, accent, 3, posMet.height) + 16;
 
     const posB = this.getWidgetPos(config, 'brand', pad, h - h * 0.035, w - pad * 2, 26);
@@ -2329,6 +2335,129 @@ export class OverlayRenderer {
       return y + h;
     }
 
+    if (design === 'speed-chaser-bracket') {
+      // Style: Aerodynamic Speed Bracket (Racing flags & speed notch)
+      const h = customH || 88;
+      this.drawWidgetCardBg(ctx, widgetKey, x, y, width, h, config, theme);
+
+      // Slanted speed chevrons on left
+      ctx.save();
+      ctx.fillStyle = elAccent;
+      const stripeW = 10;
+      ctx.beginPath();
+      ctx.moveTo(x + 18, y + 16);
+      ctx.lineTo(x + 18 + stripeW, y + 16);
+      ctx.lineTo(x + 12 + stripeW, y + h - 16);
+      ctx.lineTo(x + 12, y + h - 16);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.beginPath();
+      ctx.moveTo(x + 32, y + 16);
+      ctx.lineTo(x + 32 + stripeW, y + 16);
+      ctx.lineTo(x + 26 + stripeW, y + h - 16);
+      ctx.lineTo(x + 26, y + h - 16);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      // Top mini telemetry tag
+      const speedTag = this.getTextOverride(config, widgetKey, 'speedTag', '⚡ SPEED CHASER // GPS TELEMETRY');
+      ctx.save();
+      ctx.textAlign = 'left';
+      ctx.fillStyle = elAccent;
+      ctx.font = 'bold 9px monospace';
+      ctx.fillText(speedTag, x + 48, y + 24);
+      ctx.restore();
+
+      // Title
+      if (!offTitle.hidden && title) {
+        this.applyZDepth(ctx, offTitle.z);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'title', text);
+        ctx.font = this.getSubPartFont(config, widgetKey, 'title', 'italic bold', 28);
+        ctx.fillText(title.toUpperCase(), x + 48 + offTitle.x, y + 52 + offTitle.y);
+      }
+
+      // Subtitle
+      if (!offSub.hidden && dateText) {
+        this.applyZDepth(ctx, offSub.z);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'subtitle', textMuted);
+        ctx.font = this.getSubPartFont(config, widgetKey, 'subtitle', '600', 11);
+        ctx.fillText(dateText, x + 48 + offSub.x, y + 72 + offSub.y);
+      }
+
+      ctx.textAlign = 'right';
+      const rightX = x + width - 20;
+      if (!offRunner.hidden && runnerName) {
+        this.applyZDepth(ctx, offRunner.z);
+        ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'runner', text);
+        ctx.font = this.getSubPartFont(config, widgetKey, 'runner', 'bold', 13);
+        ctx.fillText(runnerName, rightX + offRunner.x, y + 50 + offRunner.y);
+      }
+      if (location) {
+        this.applyZDepth(ctx, offLoc.z);
+        ctx.fillStyle = elAccent;
+        ctx.font = this.getSubPartFont(config, widgetKey, 'location', 'bold', 10);
+        ctx.fillText(`📍 ${location.toUpperCase()}`, rightX + offLoc.x, y + 70 + offLoc.y);
+      }
+
+      ctx.restore();
+      this.recordBounds(widgetKey, 'Header', x, y, width, h);
+      return y + h;
+    }
+
+    if (design === 'editorial-vogue-minimal') {
+      // Style: Vogue Editorial (High-Fashion Serif & Golden Border Accent)
+      const h = customH || 96;
+      this.drawWidgetCardBg(ctx, widgetKey, x, y, width, h, config, theme);
+
+      const cx = x + width / 2;
+
+      // Top kicker label
+      const editorialKicker = this.getTextOverride(config, widgetKey, 'editorialKicker', 'THE ATHLETE ISSUE • AUTUMN / WINTER');
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.fillStyle = elAccent;
+      ctx.font = '600 9px sans-serif';
+      ctx.letterSpacing = '3px';
+      ctx.fillText(editorialKicker, cx, y + 22);
+
+      // Main Editorial Title in Serif
+      if (!offTitle.hidden && title) {
+        this.applyZDepth(ctx, offTitle.z);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'title', text);
+        ctx.font = `italic 300 32px Georgia, 'Times New Roman', serif`;
+        ctx.fillText(title, cx + offTitle.x, y + 56 + offTitle.y);
+      }
+
+      // Elegant Hairline Rule
+      ctx.strokeStyle = elAccent;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cx - 60, y + 68);
+      ctx.lineTo(cx + 60, y + 68);
+      ctx.stroke();
+
+      // Bottom Date & Runner
+      if (!offSub.hidden && dateText) {
+        this.applyZDepth(ctx, offSub.z);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'subtitle', textMuted);
+        ctx.font = '400 11px Georgia, serif';
+        ctx.letterSpacing = '1px';
+        const metaStr = runnerName ? `${dateText}   |   ${runnerName}` : dateText;
+        ctx.fillText(metaStr, cx + offSub.x, y + 84 + offSub.y);
+      }
+
+      ctx.restore();
+      this.recordBounds(widgetKey, 'Header', x, y, width, h);
+      return y + h;
+    }
+
     // DEFAULT 'modern' / 'modern-clean':
     const padX = (cardStyle !== 'floating') ? 24 : 12;
     const padY = (cardStyle !== 'floating') ? 14 : 8;
@@ -2518,6 +2647,38 @@ export class OverlayRenderer {
       for (let gy = y; gy < y + height; gy += gridStep) {
         ctx.beginPath(); ctx.moveTo(x, gy); ctx.lineTo(x + width, gy); ctx.stroke();
       }
+    } else if (design === 'neon-wire-matrix') {
+      // Neon Wireframe Matrix (Vector Grid & Digital Altitude Crossings)
+      this.drawWidgetCardBg(ctx, widgetKey, x, y, width, height, config, theme);
+      ctx.save();
+      ctx.strokeStyle = 'rgba(16, 185, 129, 0.12)';
+      ctx.lineWidth = 1;
+      const step = 20;
+      for (let gx = x; gx < x + width; gx += step) {
+        ctx.beginPath(); ctx.moveTo(gx, y); ctx.lineTo(gx, y + height); ctx.stroke();
+      }
+      for (let gy = y; gy < y + height; gy += step) {
+        ctx.beginPath(); ctx.moveTo(x, gy); ctx.lineTo(x + width, gy); ctx.stroke();
+      }
+      ctx.fillStyle = accent;
+      ctx.font = 'bold 8px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(`+ LAT ${activity.bounds.minLat.toFixed(3)}°`, x + 10, y + 14);
+      ctx.textAlign = 'right';
+      ctx.fillText(`LON ${activity.bounds.minLon.toFixed(3)}° +`, x + width - 10, y + 14);
+      ctx.restore();
+    } else if (design === 'isometric-shadow-track') {
+      // Isometric 3D Track (Extruded Ground Shadow & Beacon)
+      this.drawWidgetCardBg(ctx, widgetKey, x, y, width, height, config, theme);
+      ctx.save();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+      this.drawRoundedRect(ctx, x + 14, y + 10, 125, 18, 4);
+      ctx.fill();
+      ctx.fillStyle = accent;
+      ctx.font = 'bold 8px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('3D ISOMETRIC TRACK //', x + 76, y + 22);
+      ctx.restore();
     } else {
       this.drawWidgetCardBg(ctx, widgetKey, x, y, width, height, config, theme);
     }
@@ -2570,8 +2731,26 @@ export class OverlayRenderer {
       ctx.restore();
     }
 
+    // 3D Extruded floor shadow for isometric-shadow-track
+    if (design === 'isometric-shadow-track') {
+      ctx.save();
+      ctx.beginPath();
+      const shadowDy = 10;
+      pts.forEach((p, idx) => {
+        const [px, py] = project(p.lat, p.lon);
+        if (idx === 0) ctx.moveTo(px, py + shadowDy);
+        else ctx.lineTo(px, py + shadowDy);
+      });
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+      ctx.lineWidth = 6;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+      ctx.restore();
+    }
+
     // Glowing track shadow
-    if (design === 'glow' || design === 'bare-glow' || design === 'neon-pulse' || config.mapGlow) {
+    if (design === 'glow' || design === 'bare-glow' || design === 'neon-pulse' || design === 'neon-wire-matrix' || config.mapGlow) {
       ctx.shadowColor = accent;
       ctx.shadowBlur = design === 'bare-glow' ? 18 : 14;
     }
@@ -3710,6 +3889,155 @@ export class OverlayRenderer {
       return y + slashH;
     }
 
+    if (design === 'kinetic-bold-slash') {
+      // Style: Kinetic Racing Split (45° High-Contrast Slanted Plate)
+      const slashH = customH || 116;
+      this.recordBounds(widgetKey, 'Hero Stat', x, y, width, slashH);
+      this.drawWidgetCardBg(ctx, widgetKey, x, y, width, slashH, config, theme);
+
+      // 45-degree dual racing speed stripes
+      ctx.save();
+      ctx.fillStyle = elAccent;
+      const stripeW = 12;
+      const slantOff = 26;
+      ctx.beginPath();
+      ctx.moveTo(x + width - 70, y + 10);
+      ctx.lineTo(x + width - 70 + stripeW, y + 10);
+      ctx.lineTo(x + width - 70 + stripeW - slantOff, y + slashH - 10);
+      ctx.lineTo(x + width - 70 - slantOff, y + slashH - 10);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
+      ctx.beginPath();
+      ctx.moveTo(x + width - 50, y + 10);
+      ctx.lineTo(x + width - 50 + stripeW, y + 10);
+      ctx.lineTo(x + width - 50 + stripeW - slantOff, y + slashH - 10);
+      ctx.lineTo(x + width - 50 - slantOff, y + slashH - 10);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      // Top Category pill
+      if (!offLabel.hidden) {
+        ctx.save();
+        this.applyZDepth(ctx, offLabel.z);
+        this.drawRoundedRect(ctx, x + 20 + offLabel.x, y + 14 + offLabel.y, 110, 20, 4);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+        ctx.fill();
+        ctx.fillStyle = elAccent;
+        ctx.font = 'bold 9px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(`⚡ ${label.toUpperCase()}`, x + 75 + offLabel.x, y + 27 + offLabel.y);
+        ctx.restore();
+      }
+
+      // Massive Italic Bold Value
+      if (!offVal.hidden && mainVal) {
+        ctx.save();
+        this.applyZDepth(ctx, offVal.z);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'val', text);
+        ctx.font = this.getSubPartFont(config, widgetKey, 'val', 'italic 900', 58);
+        ctx.fillText(mainVal, x + 20 + offVal.x, y + 84 + offVal.y);
+        const valW = ctx.measureText(mainVal).width;
+        ctx.restore();
+
+        // Angled unit badge
+        if (!offUnit.hidden && mainUnit) {
+          ctx.save();
+          this.applyZDepth(ctx, offUnit.z);
+          ctx.textAlign = 'left';
+          ctx.fillStyle = elAccent;
+          ctx.font = this.getSubPartFont(config, widgetKey, 'unit', 'italic bold', 22);
+          ctx.fillText(mainUnit, x + 28 + valW + offUnit.x, y + 80 + offUnit.y);
+          ctx.restore();
+        }
+      }
+
+      ctx.restore();
+      return y + slashH;
+    }
+
+    if (design === 'neon-pulse-ring') {
+      // Style: Neon Pulse Halo (Radial Orbit Ring & Center Focal Stat)
+      const ringH = customH || 135;
+      this.recordBounds(widgetKey, 'Hero Stat', x, y, width, ringH);
+      this.drawWidgetCardBg(ctx, widgetKey, x, y, width, ringH, config, theme);
+
+      const cx = x + width / 2;
+      const cy = y + ringH / 2;
+      const radius = Math.min(width * 0.44, (ringH - 32) / 2);
+
+      // Track ring background
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+      ctx.lineWidth = 4;
+      ctx.stroke();
+
+      // Neon active orbit sweep
+      ctx.beginPath();
+      const progressFrac = activity.progress !== undefined ? activity.progress : 0.75;
+      const startAngle = -Math.PI / 2;
+      const endAngle = startAngle + Math.PI * 2 * Math.min(1, Math.max(0.1, progressFrac));
+      ctx.arc(cx, cy, radius, startAngle, endAngle);
+      ctx.strokeStyle = elAccent;
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      ctx.shadowColor = elAccent;
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+
+      // Satellite glowing dot on orbit tip
+      const tipX = cx + Math.cos(endAngle) * radius;
+      const tipY = cy + Math.sin(endAngle) * radius;
+      ctx.beginPath();
+      ctx.arc(tipX, tipY, 5, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.restore();
+
+      // Label on top
+      if (!offLabel.hidden) {
+        ctx.save();
+        this.applyZDepth(ctx, offLabel.z);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'label', textMuted);
+        ctx.font = this.getSubPartFont(config, widgetKey, 'label', 'bold', 10);
+        ctx.letterSpacing = '1px';
+        ctx.fillText(label.toUpperCase(), cx + offLabel.x, cy - radius * 0.45 + offLabel.y);
+        ctx.restore();
+      }
+
+      // Massive Centered Value
+      if (!offVal.hidden && mainVal) {
+        ctx.save();
+        this.applyZDepth(ctx, offVal.z);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'val', text);
+        ctx.font = this.getSubPartFont(config, widgetKey, 'val', 'bold', 42);
+        ctx.fillText(mainVal, cx + offVal.x, cy + 12 + offVal.y);
+        ctx.restore();
+      }
+
+      // Unit underneath
+      if (!offUnit.hidden && mainUnit) {
+        ctx.save();
+        this.applyZDepth(ctx, offUnit.z);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = elAccent;
+        ctx.font = this.getSubPartFont(config, widgetKey, 'unit', 'bold', 13);
+        ctx.letterSpacing = '1.5px';
+        ctx.fillText(mainUnit.toUpperCase(), cx + offUnit.x, cy + radius * 0.65 + offUnit.y);
+        ctx.restore();
+      }
+
+      ctx.restore();
+      return y + ringH;
+    }
+
     // Default 'mega' and 'card':
     if (cardStyle !== 'floating') {
       this.drawWidgetCardBg(ctx, widgetKey, x, y, width, h, config, theme, design === 'card');
@@ -3782,15 +4110,43 @@ export class OverlayRenderer {
     const paceLabelDefault = isLive ? 'PACE' : 'AVG PACE';
     const hrLabelDefault = isLive ? 'HEART RATE' : 'AVG HR';
 
+    const isHidden = (key) => this.isElementHidden(config, widgetKey, key) || this.getMetricItemOffsets(config, widgetKey, key).item.hidden;
+
     const metrics = [];
-    if (config.heroMetric === 'time' || config.metricShowDistance) metrics.push({ key: 'distance', label: this.getMetricLabel(config, 'Distance', 'DISTANCE'), val: `${activity.distanceFormatted} km`, icon: '📍' });
-    if (config.heroMetric !== 'time') metrics.push({ key: 'time', label: this.getMetricLabel(config, 'Time', 'TIME'), val: activity.durationFormatted, icon: '⏱️' });
-    if (config.heroMetric !== 'pace') metrics.push({ key: 'pace', label: this.getMetricLabel(config, 'Pace', paceLabelDefault), val: activity.avgPaceFormatted, icon: '⚡' });
-    if (activity.avgHr && config.metricShowHr !== false) metrics.push({ key: 'hr', label: this.getMetricLabel(config, 'Hr', hrLabelDefault), val: `${activity.avgHr} bpm`, icon: '❤️' });
-    if (activity.elevationGain !== null && config.metricShowElevation !== false) metrics.push({ key: 'elevation', label: this.getMetricLabel(config, 'Elevation', 'ELEV GAIN'), val: `+${activity.elevationGain}m`, icon: '⛰️' });
-    if (activity.avgCadence && config.metricShowCadence !== false) metrics.push({ key: 'cadence', label: this.getMetricLabel(config, 'Cadence', 'CADENCE'), val: `${activity.avgCadence} spm`, icon: '👟' });
-    if (activity.calories && config.metricShowCalories !== false) metrics.push({ key: 'calories', label: this.getMetricLabel(config, 'Calories', 'CALORIES'), val: `${activity.calories} kcal`, icon: '🔥' });
-    if (activity.bestPaceFormatted && config.metricShowBestPace !== false) metrics.push({ key: 'bestPace', label: this.getMetricLabel(config, 'BestPace', 'BEST PACE'), val: activity.bestPaceFormatted, icon: '🚀' });
+    const showDist = (config.metricShowDistance === true) || (config.metricShowDistance === undefined && config.heroMetric === 'time');
+    const showTime = config.metricShowTime !== false && config.heroMetric !== 'time';
+    const showPace = config.metricShowPace !== false && config.heroMetric !== 'pace';
+    const showHr = config.metricShowHr !== false && Boolean(activity.avgHr);
+    const showElev = config.metricShowElevation !== false && activity.elevationGain !== null && activity.elevationGain !== undefined;
+    const showCad = config.metricShowCadence !== false && Boolean(activity.avgCadence);
+    const showCal = config.metricShowCalories !== false && Boolean(activity.calories);
+    const showBestPace = (config.metricShowBestPace === true || (config.metricShowBestPace !== false && config.metricShowBestPace !== undefined)) && Boolean(activity.bestPaceFormatted);
+
+    if (showDist && !isHidden('distance')) {
+      const distStr = `${activity.distanceMain || (activity.distance ? (activity.distance / 1000).toFixed(2) : '0.00')} ${activity.distanceUnit || 'km'}`;
+      metrics.push({ key: 'distance', label: this.getMetricLabel(config, 'Distance', 'DISTANCE'), val: distStr, icon: '📍' });
+    }
+    if (showTime && !isHidden('time')) {
+      metrics.push({ key: 'time', label: this.getMetricLabel(config, 'Time', 'TIME'), val: activity.durationFormatted, icon: '⏱️' });
+    }
+    if (showPace && !isHidden('pace')) {
+      metrics.push({ key: 'pace', label: this.getMetricLabel(config, 'Pace', paceLabelDefault), val: activity.avgPaceFormatted, icon: '⚡' });
+    }
+    if (showHr && !isHidden('hr')) {
+      metrics.push({ key: 'hr', label: this.getMetricLabel(config, 'Hr', hrLabelDefault), val: `${activity.avgHr} bpm`, icon: '❤️' });
+    }
+    if (showElev && !isHidden('elevation')) {
+      metrics.push({ key: 'elevation', label: this.getMetricLabel(config, 'Elevation', 'ELEV GAIN'), val: `+${activity.elevationGain}m`, icon: '⛰️' });
+    }
+    if (showCad && !isHidden('cadence')) {
+      metrics.push({ key: 'cadence', label: this.getMetricLabel(config, 'Cadence', 'CADENCE'), val: `${activity.avgCadence} spm`, icon: '👟' });
+    }
+    if (showCal && !isHidden('calories')) {
+      metrics.push({ key: 'calories', label: this.getMetricLabel(config, 'Calories', 'CALORIES'), val: `${activity.calories} kcal`, icon: '🔥' });
+    }
+    if (showBestPace && !isHidden('bestPace')) {
+      metrics.push({ key: 'bestPace', label: this.getMetricLabel(config, 'BestPace', 'BEST PACE'), val: activity.bestPaceFormatted, icon: '🚀' });
+    }
 
     metrics.forEach((m) => {
       const customLabel = this.getTextOverride(config, widgetKey, `${m.key}Label`, null) || this.getTextOverride(config, widgetKey, m.key, null);
@@ -3799,8 +4155,31 @@ export class OverlayRenderer {
       if (customVal) m.val = customVal;
     });
 
-    const displayMetrics = metrics.slice(0, cols);
-    const cardH = customH || 80;
+    if (metrics.length === 0) {
+      this.recordBounds(widgetKey, 'Secondary Metrics', x, y, width, 0);
+      ctx.restore();
+      return y;
+    }
+
+    const isVerticalDesign = [
+      'vertical-stacked-hud',
+      'vertical-minimal-stack',
+      'vertical-pill-stack',
+      'vertical-timeline-flow',
+      'vertical-data-ladder',
+      'vertical-athletic-cards'
+    ].includes(design);
+
+    let maxItems = 6;
+    if (design === 'centered-pod-triad') maxItems = Math.min(metrics.length, 3);
+    else if (design === 'centered-cross-quad') maxItems = Math.min(metrics.length, 4);
+    else maxItems = Math.min(metrics.length, 6);
+
+    const displayMetrics = metrics.slice(0, maxItems);
+    const defaultMetH = isVerticalDesign
+      ? Math.max(160, displayMetrics.length * 46)
+      : ((design === 'cards-2col' || design === 'centered-cross-quad') ? 140 : 80);
+    const cardH = customH || defaultMetH;
     this.recordBounds(widgetKey, 'Secondary Metrics', x, y, width, cardH);
     this.drawWidgetCardBg(ctx, widgetKey, x, y, width, cardH, config, theme);
 
@@ -4604,16 +4983,9 @@ export class OverlayRenderer {
 
     if (design === 'vertical-minimal-stack') {
       const vertCount = Math.min(displayMetrics.length, 6);
-      const rowH = 34;
-      const totalH = vertCount * rowH;
+      const totalH = cardH;
+      const rowH = vertCount > 0 ? totalH / vertCount : 34;
       this.recordBounds(widgetKey, 'Secondary Metrics', x, y, width, totalH);
-
-      this.drawRoundedRect(ctx, x, y, width, totalH, 12);
-      ctx.fillStyle = cardStyle === 'solid' ? '#0e1118' : 'rgba(14, 17, 24, 0.88)';
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
 
       displayMetrics.slice(0, vertCount).forEach((m, idx) => {
         const mOff = this.getMetricItemOffsets(config, widgetKey, m.key);
@@ -4656,9 +5028,9 @@ export class OverlayRenderer {
 
     if (design === 'vertical-pill-stack') {
       const vertCount = Math.min(displayMetrics.length, 6);
-      const pillH = 38;
+      const totalH = cardH;
       const pillGap = 6;
-      const totalH = vertCount * pillH + (vertCount - 1) * pillGap;
+      const pillH = vertCount > 0 ? Math.max(24, (totalH - (vertCount - 1) * pillGap) / vertCount) : 38;
       this.recordBounds(widgetKey, 'Secondary Metrics', x, y, width, totalH);
 
       displayMetrics.slice(0, vertCount).forEach((m, idx) => {
@@ -4720,24 +5092,17 @@ export class OverlayRenderer {
 
     if (design === 'vertical-timeline-flow') {
       const vertCount = Math.min(displayMetrics.length, 6);
-      const rowH = 46;
-      const totalH = vertCount * rowH;
+      const totalH = cardH;
+      const rowH = vertCount > 0 ? totalH / vertCount : 46;
       this.recordBounds(widgetKey, 'Secondary Metrics', x, y, width, totalH);
-
-      this.drawRoundedRect(ctx, x, y, width, totalH, 12);
-      ctx.fillStyle = cardStyle === 'solid' ? '#0d1117' : 'rgba(13, 17, 23, 0.88)';
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
 
       const axisX = x + 32;
 
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.moveTo(axisX, y + 20);
-      ctx.lineTo(axisX, y + totalH - 20);
+      ctx.moveTo(axisX, y + Math.min(20, rowH / 2));
+      ctx.lineTo(axisX, y + totalH - Math.min(20, rowH / 2));
       ctx.stroke();
 
       displayMetrics.slice(0, vertCount).forEach((m, idx) => {
@@ -4749,7 +5114,8 @@ export class OverlayRenderer {
         this.applyZDepth(ctx, mOff.item.z);
         ctx.beginPath();
         ctx.arc(axisX + mOff.item.x, nodeY, 6, 0, Math.PI * 2);
-        ctx.fillStyle = '#0d1117';
+        const isBgHidden = this.isElementHidden(config, widgetKey, 'bg') || this.isTextOnly(config, widgetKey);
+        ctx.fillStyle = isBgHidden ? 'rgba(13, 17, 23, 0.75)' : (cardStyle === 'solid' ? '#0d1117' : 'rgba(13, 17, 23, 0.88)');
         ctx.fill();
         ctx.strokeStyle = elAccent;
         ctx.lineWidth = 2;
@@ -4788,9 +5154,9 @@ export class OverlayRenderer {
 
     if (design === 'vertical-data-ladder') {
       const vertCount = Math.min(displayMetrics.length, 6);
-      const rowH = 36;
+      const totalH = cardH;
       const rowGap = 4;
-      const totalH = vertCount * rowH + (vertCount - 1) * rowGap;
+      const rowH = vertCount > 0 ? Math.max(22, (totalH - (vertCount - 1) * rowGap) / vertCount) : 36;
       this.recordBounds(widgetKey, 'Secondary Metrics', x, y, width, totalH);
 
       displayMetrics.slice(0, vertCount).forEach((m, idx) => {
@@ -4845,9 +5211,9 @@ export class OverlayRenderer {
 
     if (design === 'vertical-athletic-cards') {
       const vertCount = Math.min(displayMetrics.length, 6);
-      const cardH_item = 42;
+      const totalH = cardH;
       const cardGap = 6;
-      const totalH = vertCount * cardH_item + (vertCount - 1) * cardGap;
+      const cardH_item = vertCount > 0 ? Math.max(26, (totalH - (vertCount - 1) * cardGap) / vertCount) : 42;
       this.recordBounds(widgetKey, 'Secondary Metrics', x, y, width, totalH);
 
       displayMetrics.slice(0, vertCount).forEach((m, idx) => {
@@ -4899,6 +5265,138 @@ export class OverlayRenderer {
 
       ctx.restore();
       return y + totalH;
+    }
+
+    if (design === 'cyber-hex-matrix') {
+      // Style: Cyber Hexagon Honeycomb (Chamfered Tech Cells)
+      const count = Math.min(displayMetrics.length, 6);
+      const gapX = 8;
+      const cellW = (width - (count - 1) * gapX) / count;
+      const cellH = customH || 82;
+      this.recordBounds(widgetKey, 'Secondary Metrics', x, y, width, cellH);
+
+      displayMetrics.slice(0, count).forEach((m, idx) => {
+        const mOff = this.getMetricItemOffsets(config, widgetKey, m.key);
+        if (mOff.item.hidden) return;
+        const cx = x + idx * (cellW + gapX) + mOff.item.x;
+        const cy = y + mOff.item.y;
+
+        ctx.save();
+        this.applyZDepth(ctx, mOff.item.z);
+        // Chamfered corner hexagon card
+        const cut = 10;
+        ctx.beginPath();
+        ctx.moveTo(cx + cut, cy);
+        ctx.lineTo(cx + cellW - cut, cy);
+        ctx.lineTo(cx + cellW, cy + cut);
+        ctx.lineTo(cx + cellW, cy + cellH - cut);
+        ctx.lineTo(cx + cellW - cut, cy + cellH);
+        ctx.lineTo(cx + cut, cy + cellH);
+        ctx.lineTo(cx, cy + cellH - cut);
+        ctx.lineTo(cx, cy + cut);
+        ctx.closePath();
+        ctx.fillStyle = cardStyle === 'solid' ? '#0f141f' : 'rgba(15, 20, 31, 0.88)';
+        ctx.fill();
+        ctx.strokeStyle = elAccent;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Corner cyan neon notch
+        ctx.fillStyle = elAccent;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy + cut);
+        ctx.lineTo(cx + cut, cy);
+        ctx.lineTo(cx + cut + 6, cy);
+        ctx.lineTo(cx, cy + cut + 6);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
+        // Label on top
+        if (!mOff.label.hidden) {
+          ctx.save();
+          this.applyZDepth(ctx, mOff.label.z);
+          ctx.textAlign = 'center';
+          ctx.fillStyle = mOff.label.color !== 'default' ? mOff.label.color : textMuted;
+          ctx.font = this.getMetricFont(config, widgetKey, m.key, 'label', 'bold', 9);
+          const lblStr = m.icon ? `${m.icon} ${m.label}` : m.label;
+          ctx.fillText(lblStr.toUpperCase(), cx + cellW / 2 + mOff.label.x, cy + 24 + mOff.label.y);
+          ctx.restore();
+        }
+
+        // Value on bottom
+        if (!mOff.val.hidden) {
+          ctx.save();
+          this.applyZDepth(ctx, mOff.val.z);
+          ctx.textAlign = 'center';
+          ctx.fillStyle = mOff.val.color !== 'default' ? mOff.val.color : text;
+          ctx.font = this.getMetricFont(config, widgetKey, m.key, 'val', 'bold', 16);
+          ctx.fillText(m.val, cx + cellW / 2 + mOff.val.x, cy + cellH - 16 + mOff.val.y);
+          ctx.restore();
+        }
+      });
+
+      ctx.restore();
+      return y + cellH;
+    }
+
+    if (design === 'minimal-wire-strip') {
+      // Style: Single-Line Wireframe Strip (Ultra-Thin Hairline Stream)
+      const stripH = customH || 64;
+      this.recordBounds(widgetKey, 'Secondary Metrics', x, y, width, stripH);
+
+      const count = displayMetrics.length;
+      const colW = width / count;
+
+      // Single hairline across the middle
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x + 10, y + stripH / 2);
+      ctx.lineTo(x + width - 10, y + stripH / 2);
+      ctx.stroke();
+
+      displayMetrics.forEach((m, idx) => {
+        const mOff = this.getMetricItemOffsets(config, widgetKey, m.key);
+        if (mOff.item.hidden) return;
+        const cx = x + idx * colW + colW / 2 + mOff.item.x;
+        const cy = y + mOff.item.y;
+
+        // Vertical tick delimiter
+        if (idx > 0) {
+          ctx.strokeStyle = elAccent;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(x + idx * colW, y + stripH / 2 - 8);
+          ctx.lineTo(x + idx * colW, y + stripH / 2 + 8);
+          ctx.stroke();
+        }
+
+        if (!mOff.label.hidden) {
+          ctx.save();
+          this.applyZDepth(ctx, mOff.label.z);
+          ctx.textAlign = 'center';
+          ctx.fillStyle = mOff.label.color !== 'default' ? mOff.label.color : elAccent;
+          ctx.font = this.getMetricFont(config, widgetKey, m.key, 'label', 'bold', 8.5);
+          ctx.fillText(m.label.toUpperCase(), cx + mOff.label.x, cy + 18 + mOff.label.y);
+          ctx.restore();
+        }
+
+        if (!mOff.val.hidden) {
+          ctx.save();
+          this.applyZDepth(ctx, mOff.val.z);
+          ctx.textAlign = 'center';
+          ctx.fillStyle = mOff.val.color !== 'default' ? mOff.val.color : text;
+          ctx.font = this.getMetricFont(config, widgetKey, m.key, 'val', 'bold', 15);
+          ctx.fillText(m.val, cx + mOff.val.x, cy + stripH - 12 + mOff.val.y);
+          ctx.restore();
+        }
+      });
+      ctx.restore();
+
+      ctx.restore();
+      return y + stripH;
     }
 
     if (design === 'strip') {
@@ -5794,6 +6292,167 @@ export class OverlayRenderer {
       return y + chartH;
     }
 
+    if (design === 'neon-speed-wave') {
+      // Style: Neon Speed Wave (Continuous Area Curve & Split Nodes)
+      const countW = visibleSplits.length;
+      const stepX = (width - padX * 2) / Math.max(1, countW - 1);
+      const waveAreaY = y + 46;
+      const waveAreaH = chartH - 72;
+
+      let minP = Infinity, maxP = 0;
+      visibleSplits.forEach((it) => {
+        if (it.pace > 0) {
+          if (it.pace < minP) minP = it.pace;
+          if (it.pace > maxP) maxP = it.pace;
+        }
+      });
+      if (minP === Infinity) minP = 240;
+      if (maxP <= minP) maxP = minP + 60;
+
+      const getWaveY = (pace) => {
+        const norm = Math.max(0.15, Math.min(0.95, 1 - (pace - minP) / (maxP - minP || 1)));
+        return waveAreaY + waveAreaH * (1 - norm);
+      };
+
+      // Draw continuous gradient area
+      ctx.save();
+      const grad = ctx.createLinearGradient(0, waveAreaY, 0, waveAreaY + waveAreaH);
+      grad.addColorStop(0, elAccent || '#00f0ff');
+      grad.addColorStop(1, 'rgba(0, 240, 255, 0.02)');
+
+      ctx.beginPath();
+      ctx.moveTo(x + padX, waveAreaY + waveAreaH);
+      visibleSplits.forEach((it, idx) => {
+        const px = x + padX + idx * stepX;
+        const py = getWaveY(it.pace);
+        ctx.lineTo(px, py);
+      });
+      ctx.lineTo(x + width - padX, waveAreaY + waveAreaH);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.globalAlpha = 0.28;
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+
+      // Stroke curve
+      ctx.beginPath();
+      visibleSplits.forEach((it, idx) => {
+        const px = x + padX + idx * stepX;
+        const py = getWaveY(it.pace);
+        if (idx === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.strokeStyle = elAccent;
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      // Nodes & Labels
+      visibleSplits.forEach((it, idx) => {
+        const sOff = this.getSplitItemOffsets(config, widgetKey, idx);
+        if (sOff.split.hidden) return;
+        const px = x + padX + idx * stepX + sOff.split.x;
+        const py = getWaveY(it.pace) + sOff.split.y;
+        const isFastest = it.isFastest && showFastest;
+
+        if (!sOff.bar.hidden) {
+          ctx.save();
+          this.applyZDepth(ctx, sOff.bar.z);
+          ctx.beginPath();
+          ctx.arc(px + sOff.bar.x, py + sOff.bar.y, isFastest ? 6 : 4, 0, Math.PI * 2);
+          ctx.fillStyle = isFastest ? '#ffffff' : (cardStyle === 'solid' ? '#0d1117' : 'rgba(13, 17, 23, 0.9)');
+          ctx.fill();
+          ctx.strokeStyle = isFastest ? elAccent : '#ffffff';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        if (!sOff.lap.hidden) {
+          ctx.save();
+          this.applyZDepth(ctx, sOff.lap.z);
+          ctx.textAlign = 'center';
+          ctx.fillStyle = sOff.lap.color !== 'default' ? sOff.lap.color : (isFastest ? elAccent : textMuted);
+          ctx.font = this.getSplitFont(config, widgetKey, idx, 'lap', 'bold', 9);
+          ctx.fillText(it.shortName, px + sOff.lap.x, waveAreaY + waveAreaH + 16 + sOff.lap.y);
+          ctx.restore();
+        }
+
+        if (!sOff.pace.hidden && (countW <= 12 || isFastest || idx === 0 || idx === countW - 1)) {
+          ctx.save();
+          this.applyZDepth(ctx, sOff.pace.z);
+          ctx.textAlign = 'center';
+          ctx.fillStyle = sOff.pace.color !== 'default' ? sOff.pace.color : (isFastest ? elAccent : text);
+          ctx.font = this.getSplitFont(config, widgetKey, idx, 'pace', 'bold', 9.5);
+          ctx.fillText(it.paceFormatted.split(' ')[0], px + sOff.pace.x, py - 10 + sOff.pace.y);
+          ctx.restore();
+        }
+      });
+
+      ctx.restore();
+      return y + chartH;
+    }
+
+    if (design === 'minimal-dot-timeline') {
+      // Style: Horizontal Pulse Track (Stepped Beads & Fastest Pill)
+      const countT = visibleSplits.length;
+      const trackY = y + 44 + (chartH - 60) / 2;
+      const stepT = (width - padX * 2) / Math.max(1, countT - 1);
+
+      // Baseline track wire
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x + padX, trackY);
+      ctx.lineTo(x + width - padX, trackY);
+      ctx.stroke();
+
+      visibleSplits.forEach((it, idx) => {
+        const sOff = this.getSplitItemOffsets(config, widgetKey, idx);
+        if (sOff.split.hidden) return;
+        const bx = x + padX + idx * stepT + sOff.split.x;
+        const isFastest = it.isFastest && showFastest;
+
+        if (!sOff.bar.hidden) {
+          ctx.save();
+          this.applyZDepth(ctx, sOff.bar.z);
+          const beadR = isFastest ? 8 : 5;
+          ctx.beginPath();
+          ctx.arc(bx + sOff.bar.x, trackY + sOff.bar.y, beadR, 0, Math.PI * 2);
+          ctx.fillStyle = isFastest ? elAccent : 'rgba(255, 255, 255, 0.6)';
+          if (isFastest) {
+            ctx.shadowColor = elAccent;
+            ctx.shadowBlur = 10;
+          }
+          ctx.fill();
+          ctx.restore();
+        }
+
+        if (!sOff.lap.hidden) {
+          ctx.save();
+          this.applyZDepth(ctx, sOff.lap.z);
+          ctx.textAlign = 'center';
+          ctx.fillStyle = sOff.lap.color !== 'default' ? sOff.lap.color : textMuted;
+          ctx.font = this.getSplitFont(config, widgetKey, idx, 'lap', 'bold', 9);
+          ctx.fillText(it.shortName, bx + sOff.lap.x, trackY + 18 + sOff.lap.y);
+          ctx.restore();
+        }
+
+        if (!sOff.pace.hidden && (countT <= 14 || isFastest)) {
+          ctx.save();
+          this.applyZDepth(ctx, sOff.pace.z);
+          ctx.textAlign = 'center';
+          ctx.fillStyle = sOff.pace.color !== 'default' ? sOff.pace.color : (isFastest ? elAccent : text);
+          ctx.font = this.getSplitFont(config, widgetKey, idx, 'pace', 'bold', 9);
+          ctx.fillText(it.paceFormatted.split(' ')[0], bx + sOff.pace.x, trackY - 14 + sOff.pace.y);
+          ctx.restore();
+        }
+      });
+
+      ctx.restore();
+      return y + chartH;
+    }
+
     if (design === 'horizontal-bars') {
       const isAnim = activity.isAnimated && items.some((it) => it.isCompleted !== undefined);
       const countH = items.length;
@@ -6124,6 +6783,184 @@ export class OverlayRenderer {
     const offHr = this.getElementOffset(config, widgetKey, 'hr');
 
     const padX = 24;
+
+    if (design === 'speed-record-banner') {
+      // Speed Record Banner (Gold Metallic Champion Plaque with Laurel Stars)
+      const bannerH = customH || 120;
+      this.recordBounds(widgetKey, 'Split Highlight', x, y, width, bannerH);
+      this.drawWidgetCardBg(ctx, widgetKey, x, y, width, bannerH, config, theme, true);
+
+      // Metallic gold border accent line at the top
+      ctx.save();
+      const goldGrad = ctx.createLinearGradient(x, y, x + width, y);
+      goldGrad.addColorStop(0, '#f59e0b');
+      goldGrad.addColorStop(0.5, '#fef08a');
+      goldGrad.addColorStop(1, '#d97706');
+      ctx.fillStyle = goldGrad;
+      ctx.fillRect(x + 12, y + 2, width - 24, 3);
+      ctx.restore();
+
+      const effAlign = this.getWidgetAlign(align, 'left');
+      const isCenter = effAlign === 'center';
+      const isRight = effAlign === 'right';
+
+      // Left Icon & Record Badge
+      if (!offBadge.hidden) {
+        ctx.save();
+        this.applyZDepth(ctx, offBadge.z);
+        const badgeX = isCenter ? x + width / 2 : (isRight ? x + width - padX : x + padX);
+        ctx.textAlign = isCenter ? 'center' : (isRight ? 'right' : 'left');
+        ctx.fillStyle = '#fbbf24';
+        ctx.font = this.getSubPartFont(config, widgetKey, 'badge', 'bold', 12);
+        ctx.letterSpacing = '1.5px';
+        const defaultTag = isTargetLive
+          ? `⚡ LIVE RECORD PACING • ${target.name.toUpperCase()}`
+          : ((target.isFastest && showFastest) ? `🏆 RECORD SPLIT // ${target.name.toUpperCase()} ★★★` : `SPEED BANNER // ${target.name.toUpperCase()}`);
+        const tag = this.getTextOverride(config, widgetKey, 'badge', defaultTag);
+        ctx.fillText(tag, badgeX + offBadge.x, y + 32 + offBadge.y);
+        ctx.restore();
+      }
+
+      // Massive Pace Numerals
+      if (!offVal.hidden) {
+        ctx.save();
+        this.applyZDepth(ctx, offVal.z);
+        const valX = isCenter ? x + width / 2 : (isRight ? x + width - padX : x + padX);
+        ctx.textAlign = isCenter ? 'center' : (isRight ? 'right' : 'left');
+        ctx.fillStyle = '#ffffff';
+        ctx.font = this.getSubPartFont(config, widgetKey, 'val', 'bold', 44);
+        ctx.shadowColor = 'rgba(251, 191, 36, 0.45)';
+        ctx.shadowBlur = 12;
+        const valText = this.getTextOverride(config, widgetKey, 'val', targetPaceFormatted);
+        ctx.fillText(valText, valX + offVal.x, y + 78 + offVal.y);
+        ctx.restore();
+      }
+
+      // Subtitle / Label
+      if (!offTitle.hidden) {
+        ctx.save();
+        this.applyZDepth(ctx, offTitle.z);
+        const titleX = isCenter ? x + width / 2 : (isRight ? x + padX : x + width - padX);
+        ctx.textAlign = isCenter ? 'center' : (isRight ? 'left' : 'right');
+        ctx.fillStyle = theme.text;
+        ctx.font = this.getSubPartFont(config, widgetKey, 'title', 'bold', 13);
+        const titleText = this.getTextOverride(config, widgetKey, 'title', target.name.toUpperCase());
+        ctx.fillText(titleText, titleX + offTitle.x, (isCenter ? y + 98 : y + 36) + offTitle.y);
+        ctx.restore();
+      }
+
+      // Split Time
+      if (!offTime.hidden) {
+        ctx.save();
+        this.applyZDepth(ctx, offTime.z);
+        const timeX = isCenter ? x + width / 2 : (isRight ? x + padX : x + width - padX);
+        ctx.textAlign = isCenter ? 'center' : (isRight ? 'left' : 'right');
+        ctx.fillStyle = '#fbbf24';
+        ctx.font = this.getSubPartFont(config, widgetKey, 'time', 'bold', 14);
+        const timeText = this.getTextOverride(config, widgetKey, 'time', `⏱️ ${targetTimeFormatted}`);
+        ctx.fillText(timeText, timeX + offTime.x, (isCenter ? y + 114 : y + 62) + offTime.y);
+        ctx.restore();
+      }
+
+      // HR or Elevation
+      if (!offHr.hidden && (target.avgHr || activity.avgHr || target.elevationGain !== undefined)) {
+        ctx.save();
+        this.applyZDepth(ctx, offHr.z);
+        const hrX = isCenter ? x + width / 2 : (isRight ? x + padX : x + width - padX);
+        ctx.textAlign = isCenter ? 'center' : (isRight ? 'left' : 'right');
+        ctx.fillStyle = theme.textMuted;
+        ctx.font = this.getSubPartFont(config, widgetKey, 'hr', '600', 12);
+        const hrVal = isTargetLive && activity.liveHr ? activity.liveHr : (target.avgHr || activity.avgHr);
+        const defaultStat = hrVal ? `❤️ ${hrVal} BPM` : `Gain: +${target.elevationGain || 0}m`;
+        const hrText = this.getTextOverride(config, widgetKey, 'hr', defaultStat);
+        if (!isCenter) {
+          ctx.fillText(hrText, hrX + offHr.x, y + 84 + offHr.y);
+        }
+        ctx.restore();
+      }
+
+      ctx.restore();
+      return y + bannerH;
+    }
+
+    if (design === 'minimal-focus-tag') {
+      // Minimal Focus Tag (Swiss Monospace Badge with Vertical Color Bar)
+      const tagH = customH || 105;
+      this.recordBounds(widgetKey, 'Split Highlight', x, y, width, tagH);
+      this.drawWidgetCardBg(ctx, widgetKey, x, y, width, tagH, config, theme, true);
+
+      // Left vertical accent bar
+      ctx.save();
+      ctx.fillStyle = accent;
+      this.drawRoundedRect(ctx, x + 8, y + 12, 4, tagH - 24, 2);
+      ctx.fill();
+      ctx.restore();
+
+      const effAlign = this.getWidgetAlign(align, 'left');
+      const isCenter = effAlign === 'center';
+      const isRight = effAlign === 'right';
+
+      const contentPad = padX + 8;
+
+      if (!offBadge.hidden) {
+        ctx.save();
+        this.applyZDepth(ctx, offBadge.z);
+        const bX = isCenter ? x + width / 2 : (isRight ? x + width - contentPad : x + contentPad);
+        ctx.textAlign = isCenter ? 'center' : (isRight ? 'right' : 'left');
+        ctx.fillStyle = accent;
+        ctx.font = this.getSubPartFont(config, widgetKey, 'badge', '600', 11);
+        ctx.letterSpacing = '1px';
+        const defaultTag = isTargetLive
+          ? `LIVE // ${target.name.toUpperCase()}`
+          : ((target.isFastest && showFastest) ? `TOP SPLIT // ${target.name.toUpperCase()}` : `FOCUS // ${target.name.toUpperCase()}`);
+        const tag = this.getTextOverride(config, widgetKey, 'badge', defaultTag);
+        ctx.fillText(tag, bX + offBadge.x, y + 30 + offBadge.y);
+        ctx.restore();
+      }
+
+      if (!offVal.hidden) {
+        ctx.save();
+        this.applyZDepth(ctx, offVal.z);
+        const vX = isCenter ? x + width / 2 : (isRight ? x + width - contentPad : x + contentPad);
+        ctx.textAlign = isCenter ? 'center' : (isRight ? 'right' : 'left');
+        ctx.fillStyle = '#ffffff';
+        ctx.font = this.getSubPartFont(config, widgetKey, 'val', 'bold', 38);
+        const valText = this.getTextOverride(config, widgetKey, 'val', targetPaceFormatted);
+        ctx.fillText(valText, vX + offVal.x, y + 74 + offVal.y);
+        ctx.restore();
+      }
+
+      if (!offTime.hidden) {
+        ctx.save();
+        this.applyZDepth(ctx, offTime.z);
+        const tX = isCenter ? x + width / 2 : (isRight ? x + contentPad : x + width - contentPad);
+        ctx.textAlign = isCenter ? 'center' : (isRight ? 'left' : 'right');
+        ctx.fillStyle = theme.textMuted;
+        ctx.font = this.getSubPartFont(config, widgetKey, 'time', 'bold', 13);
+        const timeText = this.getTextOverride(config, widgetKey, 'time', targetTimeFormatted);
+        ctx.fillText(timeText, tX + offTime.x, (isCenter ? y + 96 : y + 42) + offTime.y);
+        ctx.restore();
+      }
+
+      if (!offHr.hidden && (target.avgHr || activity.avgHr || target.elevationGain !== undefined)) {
+        ctx.save();
+        this.applyZDepth(ctx, offHr.z);
+        const hX = isCenter ? x + width / 2 : (isRight ? x + contentPad : x + width - contentPad);
+        ctx.textAlign = isCenter ? 'center' : (isRight ? 'left' : 'right');
+        ctx.fillStyle = '#f87171';
+        ctx.font = this.getSubPartFont(config, widgetKey, 'hr', '600', 12);
+        const hrVal = isTargetLive && activity.liveHr ? activity.liveHr : (target.avgHr || activity.avgHr);
+        const defaultStat = hrVal ? `${hrVal} BPM` : `+${target.elevationGain || 0}m`;
+        const hrText = this.getTextOverride(config, widgetKey, 'hr', defaultStat);
+        if (!isCenter) {
+          ctx.fillText(hrText, hX + offHr.x, y + 68 + offHr.y);
+        }
+        ctx.restore();
+      }
+
+      ctx.restore();
+      return y + tagH;
+    }
 
     if (design === 'centered-trophy-card') {
       // Centered Trophy Card (Golden Halo & Fast Split Badge)
@@ -6930,6 +7767,136 @@ export class OverlayRenderer {
       return y + height;
     }
 
+    if (design === 'stepped-elevation-terrace') {
+      // Stepped Elevation Terrace (Quantized Multi-Tier Elevation Slabs)
+      const tiers = 4;
+      for (let t = 1; t <= tiers; t++) {
+        const tierRatio = t / tiers;
+        ctx.beginPath();
+        ctx.moveTo(chartX, chartY + chartH);
+        pts.forEach((p) => {
+          const px = chartX + (p.dist / totalDist) * chartW;
+          const rawNorm = (p.ele - minEle) / dEle;
+          const terraceNorm = Math.min(tierRatio, Math.floor(rawNorm * tiers + 0.5) / tiers);
+          const py = chartY + chartH - terraceNorm * chartH;
+          ctx.lineTo(px, py);
+        });
+        ctx.lineTo(chartX + chartW, chartY + chartH);
+        ctx.closePath();
+        ctx.fillStyle = accent;
+        ctx.globalAlpha = 0.12 * t;
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1.0;
+
+      // Top terrace contour stroke
+      ctx.beginPath();
+      pts.forEach((p, idx) => {
+        const px = chartX + (p.dist / totalDist) * chartW;
+        const py = getY(p.ele);
+        if (idx === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      // Peak summit flag
+      let peakPt = pts[0];
+      pts.forEach((p) => { if (p.ele > peakPt.ele) peakPt = p; });
+      const peakX = chartX + (peakPt.dist / totalDist) * chartW;
+      const peakY = getY(peakPt.ele);
+      ctx.fillStyle = accent;
+      ctx.font = 'bold 10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`▲ ${Math.round(peakPt.ele)}m`, peakX, peakY - 8);
+
+      if (activity.runnerPoint) {
+        const curY = getY(activity.runnerPoint.ele);
+        this.drawChartScanningCursor(ctx, chartX, chartY, chartW, chartH, activity.runnerPoint.dist, totalDist, curY, `▲ ${Math.round(activity.runnerPoint.ele)}m`, accent, font);
+      }
+      ctx.restore();
+      return y + height;
+    }
+
+    if (design === 'cyber-altitude-grid') {
+      // Cyber Altitude Grid (Neon Sci-Fi Elevation Grid & High-Tech Summit Beacon)
+      ctx.save();
+      ctx.strokeStyle = 'rgba(0, 240, 255, 0.1)';
+      ctx.lineWidth = 1;
+      // Horizontal altitude lines
+      for (let i = 0; i <= 3; i++) {
+        const gy = chartY + (chartH / 3) * i;
+        ctx.beginPath();
+        ctx.moveTo(chartX, gy);
+        ctx.lineTo(chartX + chartW, gy);
+        ctx.stroke();
+      }
+      // Vertical distance gridlines
+      for (let i = 1; i <= 4; i++) {
+        const gx = chartX + (chartW / 4) * i;
+        ctx.beginPath();
+        ctx.moveTo(gx, chartY);
+        ctx.lineTo(gx, chartY + chartH);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Glowing Cyan Fill
+      const grad = ctx.createLinearGradient(0, chartY, 0, chartY + chartH);
+      grad.addColorStop(0, 'rgba(0, 240, 255, 0.45)');
+      grad.addColorStop(1, 'rgba(0, 240, 255, 0.02)');
+
+      ctx.beginPath();
+      ctx.moveTo(chartX, chartY + chartH);
+      pts.forEach((p) => {
+        const px = chartX + (p.dist / totalDist) * chartW;
+        const py = getY(p.ele);
+        ctx.lineTo(px, py);
+      });
+      ctx.lineTo(chartX + chartW, chartY + chartH);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Top glowing neon curve
+      ctx.beginPath();
+      pts.forEach((p, idx) => {
+        const px = chartX + (p.dist / totalDist) * chartW;
+        const py = getY(p.ele);
+        if (idx === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.strokeStyle = '#00f0ff';
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = '#00f0ff';
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // Summit peak pill
+      let peakPt = pts[0];
+      pts.forEach((p) => { if (p.ele > peakPt.ele) peakPt = p; });
+      const peakX = chartX + (peakPt.dist / totalDist) * chartW;
+      const peakY = getY(peakPt.ele);
+      ctx.fillStyle = '#00f0ff';
+      ctx.beginPath();
+      ctx.arc(peakX, peakY, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#00f0ff';
+      ctx.fillText(`ALT MAX: ${Math.round(peakPt.ele)}M`, peakX, peakY - 8);
+
+      if (activity.runnerPoint) {
+        const curY = getY(activity.runnerPoint.ele);
+        this.drawChartScanningCursor(ctx, chartX, chartY, chartW, chartH, activity.runnerPoint.dist, totalDist, curY, `▲ ${Math.round(activity.runnerPoint.ele)}m`, '#00f0ff', font);
+      }
+      ctx.restore();
+      return y + height;
+    }
+
     if (design === 'mountain-peaks') {
       // Style 4: Mountain Silhouette with summit flag
       ctx.fillStyle = 'rgba(16, 185, 129, 0.25)';
@@ -7202,6 +8169,140 @@ export class OverlayRenderer {
       return y + height;
     }
 
+    if (design === 'candlestick-pace-bars') {
+      // Candlestick Pace Bars (Financial Interval Candles with High-Low Wicks)
+      const candleCount = Math.min(28, Math.max(12, Math.floor(chartW / 14)));
+      const ptsPerCandle = Math.max(1, Math.floor(pts.length / candleCount));
+      const cW = Math.max(4, chartW / candleCount - 3);
+
+      for (let i = 0; i < candleCount; i++) {
+        const startIdx = i * ptsPerCandle;
+        const endIdx = Math.min(pts.length - 1, (i + 1) * ptsPerCandle);
+        const candlePts = pts.slice(startIdx, endIdx + 1);
+        if (candlePts.length === 0) continue;
+
+        let lowPace = Infinity, highPace = 0;
+        candlePts.forEach((p) => {
+          if (p.pace < lowPace) lowPace = p.pace;
+          if (p.pace > highPace) highPace = p.pace;
+        });
+        const openPace = candlePts[0].pace;
+        const closePace = candlePts[candlePts.length - 1].pace;
+        const isBullish = closePace <= openPace; // Lower pace number = faster running = positive!
+
+        const cx = chartX + i * (cW + 3) + cW / 2;
+        const openY = getY(openPace);
+        const closeY = getY(closePace);
+        const highY = getY(lowPace);  // Fastest = lowest pace = highest on chart
+        const lowY = getY(highPace);  // Slowest = lowest on chart
+
+        const candleColor = isBullish ? (elAccent || '#10b981') : '#f87171';
+
+        // Draw wick
+        ctx.strokeStyle = candleColor;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(cx, highY);
+        ctx.lineTo(cx, lowY);
+        ctx.stroke();
+
+        // Draw candle body
+        const topY = Math.min(openY, closeY);
+        const bodyH = Math.max(3, Math.abs(closeY - openY));
+        ctx.fillStyle = candleColor;
+        this.drawRoundedRect(ctx, cx - cW / 2, topY, cW, bodyH, 1.5);
+        ctx.fill();
+      }
+
+      // Dashed avg pace line
+      const avgY = getY(activity.avgPace);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(chartX, avgY);
+      ctx.lineTo(chartX + chartW, avgY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      if (activity.runnerPoint) {
+        const curY = getY(activity.avgPace);
+        this.drawChartScanningCursor(ctx, chartX, chartY, chartW, chartH, activity.runnerPoint.dist, totalDist, curY, activity.avgPaceFormatted, elAccent, font);
+      }
+      ctx.restore();
+      return y + height;
+    }
+
+    if (design === 'neon-speed-ribbon') {
+      // Neon Speed Ribbon (Dual Glowing Velocity Streamers & Speed Apex)
+      const grad = ctx.createLinearGradient(0, chartY, 0, chartY + chartH);
+      grad.addColorStop(0, elAccent || '#38bdf8');
+      grad.addColorStop(1, 'rgba(56, 189, 248, 0.04)');
+
+      ctx.beginPath();
+      ctx.moveTo(chartX, chartY + chartH);
+      pts.forEach((p) => {
+        const px = chartX + (p.dist / totalDist) * chartW;
+        const py = getY(p.pace);
+        ctx.lineTo(px, py);
+      });
+      ctx.lineTo(chartX + chartW, chartY + chartH);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.globalAlpha = 0.35;
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+
+      // Primary glowing line
+      ctx.beginPath();
+      pts.forEach((p, idx) => {
+        const px = chartX + (p.dist / totalDist) * chartW;
+        const py = getY(p.pace);
+        if (idx === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.strokeStyle = elAccent || '#38bdf8';
+      ctx.lineWidth = 3;
+      ctx.shadowColor = elAccent || '#38bdf8';
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // Secondary parallel streamer ribbon
+      ctx.beginPath();
+      pts.forEach((p, idx) => {
+        const px = chartX + (p.dist / totalDist) * chartW;
+        const py = Math.min(chartY + chartH, getY(p.pace) + 4);
+        if (idx === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Apex speed pill
+      let fastestPt = pts[0];
+      pts.forEach((p) => { if (p.pace < fastestPt.pace) fastestPt = p; });
+      const apexX = chartX + (fastestPt.dist / totalDist) * chartW;
+      const apexY = getY(fastestPt.pace);
+      ctx.fillStyle = elAccent || '#38bdf8';
+      ctx.beginPath();
+      ctx.arc(apexX, apexY, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('⚡ FASTEST', apexX, apexY - 8);
+
+      if (activity.runnerPoint) {
+        const curY = getY(activity.avgPace);
+        this.drawChartScanningCursor(ctx, chartX, chartY, chartW, chartH, activity.runnerPoint.dist, totalDist, curY, activity.avgPaceFormatted, elAccent, font);
+      }
+      ctx.restore();
+      return y + height;
+    }
+
     if (design === 'gradient-zone') {
       // Green / Cyan / Orange zone fills
       const grad = ctx.createLinearGradient(0, chartY, 0, chartY + chartH);
@@ -7453,6 +8554,131 @@ export class OverlayRenderer {
       return y + height;
     }
 
+    if (design === 'ecg-cyber-pulse') {
+      // ECG Cyber Pulse (Phosphor CRT Oscilloscope Matrix & Bio-Telemetry)
+      ctx.save();
+      // CRT phosphor green grid
+      ctx.strokeStyle = 'rgba(16, 185, 129, 0.12)';
+      ctx.lineWidth = 1;
+      for (let gy = chartY; gy <= chartY + chartH; gy += chartH / 4) {
+        ctx.beginPath(); ctx.moveTo(chartX, gy); ctx.lineTo(chartX + chartW, gy); ctx.stroke();
+      }
+      for (let gx = chartX; gx <= chartX + chartW; gx += chartW / 6) {
+        ctx.beginPath(); ctx.moveTo(gx, chartY); ctx.lineTo(gx, chartY + chartH); ctx.stroke();
+      }
+
+      // Phosphor Green Wash
+      const grad = ctx.createLinearGradient(0, chartY, 0, chartY + chartH);
+      grad.addColorStop(0, 'rgba(16, 229, 152, 0.35)');
+      grad.addColorStop(1, 'rgba(16, 229, 152, 0.02)');
+
+      ctx.beginPath();
+      ctx.moveTo(chartX, chartY + chartH);
+      pts.forEach((p) => {
+        const px = chartX + (p.dist / totalDist) * chartW;
+        const py = getY(p.hr);
+        ctx.lineTo(px, py);
+      });
+      ctx.lineTo(chartX + chartW, chartY + chartH);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Glowing phosphor trace
+      ctx.beginPath();
+      pts.forEach((p, idx) => {
+        const px = chartX + (p.dist / totalDist) * chartW;
+        const py = getY(p.hr);
+        if (idx === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.strokeStyle = '#10e598';
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = '#10e598';
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // Avg HR reference dashed line
+      if (activity.avgHr) {
+        const avgY = getY(activity.avgHr);
+        ctx.strokeStyle = 'rgba(16, 229, 152, 0.4)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath(); ctx.moveTo(chartX, avgY); ctx.lineTo(chartX + chartW, avgY); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      ctx.restore();
+
+      if (activity.runnerPoint) {
+        const curY = getY(activity.runnerPoint.hr);
+        this.drawChartScanningCursor(ctx, chartX, chartY, chartW, chartH, activity.runnerPoint.dist, totalDist, curY, `${activity.runnerPoint.hr} BPM`, '#10e598', font);
+      }
+      ctx.restore();
+      return y + height;
+    }
+
+    if (design === 'cardiac-zone-flame') {
+      // Cardiac Zone Flame (Thermal Multi-Zone Fire Gradient Spectrum)
+      const grad = ctx.createLinearGradient(0, chartY + chartH, 0, chartY);
+      grad.addColorStop(0, '#3b82f6');    // Z1 Blue
+      grad.addColorStop(0.3, '#10b981');  // Z2 Green
+      grad.addColorStop(0.55, '#f59e0b'); // Z3 Amber
+      grad.addColorStop(0.8, '#f97316');  // Z4 Orange
+      grad.addColorStop(1.0, '#ef4444');  // Z5 Red
+
+      ctx.beginPath();
+      ctx.moveTo(chartX, chartY + chartH);
+      pts.forEach((p) => {
+        const px = chartX + (p.dist / totalDist) * chartW;
+        const py = getY(p.hr);
+        ctx.lineTo(px, py);
+      });
+      ctx.lineTo(chartX + chartW, chartY + chartH);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.globalAlpha = 0.45;
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+
+      // Top glowing flame stroke
+      ctx.beginPath();
+      pts.forEach((p, idx) => {
+        const px = chartX + (p.dist / totalDist) * chartW;
+        const py = getY(p.hr);
+        if (idx === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 2.8;
+      ctx.shadowColor = '#f97316';
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // Peak HR beacon
+      let peakPt = pts[0];
+      pts.forEach((p) => { if (p.hr > peakPt.hr) peakPt = p; });
+      const peakX = chartX + (peakPt.dist / totalDist) * chartW;
+      const peakY = getY(peakPt.hr);
+      ctx.fillStyle = '#ef4444';
+      ctx.beginPath();
+      ctx.arc(peakX, peakY, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.font = 'bold 9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#fca5a5';
+      ctx.fillText(`🔥 MAX ${peakPt.hr}`, peakX, peakY - 8);
+
+      if (activity.runnerPoint) {
+        const curY = getY(activity.runnerPoint.hr);
+        this.drawChartScanningCursor(ctx, chartX, chartY, chartW, chartH, activity.runnerPoint.dist, totalDist, curY, `${activity.runnerPoint.hr} BPM`, '#ef4444', font);
+      }
+      ctx.restore();
+      return y + height;
+    }
+
     if (design === 'cardiac-monitor') {
       // Style 6: Pro Cardiac Oscilloscope CRT Display
       ctx.strokeStyle = 'rgba(16, 185, 129, 0.15)';
@@ -7582,6 +8808,173 @@ export class OverlayRenderer {
     const isLive = activity.isAnimated && activity.progress < 0.999;
     const labelOverride = this.getTextOverride(config, widgetKey, 'label', null);
     const unitOverride = this.getTextOverride(config, widgetKey, 'unit', 'BPM');
+
+    if (design === 'minimal-cardiac-pill') {
+      // Minimal Cardiac Pill (Floating Translucent Capsule & Live Zone Pip)
+      const pillH = customH || 58;
+      this.recordBounds(widgetKey, 'Avg HR Badge', x, y, width, pillH);
+      this.drawWidgetCardBg(ctx, widgetKey, x, y, width, pillH, config, theme, true);
+
+      let zoneCol = '#10b981';
+      if (activity.avgHr > 175) zoneCol = '#ef4444';
+      else if (activity.avgHr > 160) zoneCol = '#f97316';
+      else if (activity.avgHr > 145) zoneCol = '#f59e0b';
+      else if (activity.avgHr < 125) zoneCol = '#3b82f6';
+
+      const effAlign = this.getWidgetAlign(align, 'left');
+      const isCenter = effAlign === 'center';
+      const isRight = effAlign === 'right';
+
+      // Left heart icon + colored zone dot
+      if (!offIcon.hidden) {
+        ctx.save();
+        this.applyZDepth(ctx, offIcon.z);
+        const iconX = isCenter ? x + width / 2 - 40 : (isRight ? x + width - 36 : x + 24);
+        ctx.textAlign = 'center';
+        ctx.font = '18px sans-serif';
+        ctx.fillText('❤️', iconX + offIcon.x, y + pillH / 2 + 6 + offIcon.y);
+
+        // Zone Pip dot
+        ctx.fillStyle = zoneCol;
+        ctx.shadowColor = zoneCol;
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(iconX + 10 + offIcon.x, y + pillH / 2 - 6 + offIcon.y, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+      }
+
+      // HR Value
+      if (!offVal.hidden) {
+        ctx.save();
+        this.applyZDepth(ctx, offVal.z);
+        const valX = isCenter ? x + width / 2 + 8 : (isRight ? x + width - 64 : x + 54);
+        ctx.textAlign = isCenter ? 'center' : (isRight ? 'right' : 'left');
+        ctx.fillStyle = '#ffffff';
+        ctx.font = this.getSubPartFont(config, widgetKey, 'val', 'bold', 24);
+        const valStr = offUnit.hidden ? `${activity.avgHr}` : `${activity.avgHr} ${unitOverride}`;
+        ctx.fillText(valStr, valX + offVal.x, y + pillH / 2 + 7 + offVal.y);
+        ctx.restore();
+      }
+
+      // Peak or Label on opposite side
+      if (!offPeak.hidden && !isCenter) {
+        ctx.save();
+        this.applyZDepth(ctx, offPeak.z);
+        const peakX = isRight ? x + 20 : x + width - 20;
+        ctx.textAlign = isRight ? 'left' : 'right';
+        ctx.fillStyle = theme.textMuted;
+        ctx.font = this.getSubPartFont(config, widgetKey, 'peak', '600', 12);
+        const peakDefault = `MAX ${activity.maxHr || '--'}`;
+        const peakText = this.getTextOverride(config, widgetKey, 'peak', peakDefault);
+        ctx.fillText(peakText, peakX + offPeak.x, y + pillH / 2 + 5 + offPeak.y);
+        ctx.restore();
+      }
+
+      ctx.restore();
+      return y + pillH;
+    }
+
+    if (design === 'cyber-hud-cardiac-gauge') {
+      // Cyber HUD Cardiac Gauge (Segmented 5-Zone Arc & Digital Telemetry)
+      const gaugeH = customH || 86;
+      this.recordBounds(widgetKey, 'Avg HR Badge', x, y, width, gaugeH);
+      this.drawWidgetCardBg(ctx, widgetKey, x, y, width, gaugeH, config, theme, true);
+
+      const effAlign = this.getWidgetAlign(align, 'left');
+      const isCenter = effAlign === 'center';
+      const isRight = effAlign === 'right';
+
+      const dialR = 26;
+      const dialCx = isCenter ? x + width / 2 : (isRight ? x + width - dialR - 24 : x + dialR + 24);
+      const dialCy = y + gaugeH / 2;
+
+      // Draw 5 segmented radial zone arcs
+      const zoneColors = ['#3b82f6', '#10b981', '#f59e0b', '#f97316', '#ef4444'];
+      const startAngle = Math.PI * 0.75;
+      const totalSweep = Math.PI * 1.5;
+      const segSweep = totalSweep / 5;
+      const segGap = 0.08;
+
+      let activeZone = 1;
+      if (activity.avgHr > 175) activeZone = 5;
+      else if (activity.avgHr > 160) activeZone = 4;
+      else if (activity.avgHr > 145) activeZone = 3;
+      else if (activity.avgHr > 125) activeZone = 2;
+
+      ctx.save();
+      for (let z = 0; z < 5; z++) {
+        const a1 = startAngle + z * segSweep + segGap / 2;
+        const a2 = startAngle + (z + 1) * segSweep - segGap / 2;
+        ctx.beginPath();
+        ctx.arc(dialCx, dialCy, dialR, a1, a2);
+        ctx.strokeStyle = z < activeZone ? zoneColors[z] : 'rgba(255, 255, 255, 0.12)';
+        ctx.lineWidth = 4;
+        if (z === activeZone - 1) {
+          ctx.shadowColor = zoneColors[z];
+          ctx.shadowBlur = 8;
+        } else {
+          ctx.shadowBlur = 0;
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Dial Center Heart or Numeral
+      if (!offIcon.hidden) {
+        ctx.save();
+        this.applyZDepth(ctx, offIcon.z);
+        ctx.textAlign = 'center';
+        ctx.font = '16px sans-serif';
+        ctx.fillText('❤️', dialCx + offIcon.x, dialCy + 6 + offIcon.y);
+        ctx.restore();
+      }
+
+      // Telemetry texts
+      const textX = isCenter ? dialCx : (isRight ? x + 24 : dialCx + dialR + 20);
+      const textAlign = isCenter ? 'center' : (isRight ? 'left' : 'left');
+
+      if (!offLabel.hidden) {
+        ctx.save();
+        this.applyZDepth(ctx, offLabel.z);
+        ctx.textAlign = textAlign;
+        ctx.fillStyle = zoneColors[activeZone - 1];
+        ctx.font = this.getSubPartFont(config, widgetKey, 'label', 'bold', 11);
+        ctx.letterSpacing = '1px';
+        const defaultLabel = `ZONE ${activeZone} • ${isLive ? 'LIVE' : 'AVG'}`;
+        const labelText = this.getTextOverride(config, widgetKey, 'label', defaultLabel);
+        ctx.fillText(labelText, textX + offLabel.x, (isCenter ? y + 20 : y + 32) + offLabel.y);
+        ctx.restore();
+      }
+
+      if (!offVal.hidden) {
+        ctx.save();
+        this.applyZDepth(ctx, offVal.z);
+        ctx.textAlign = textAlign;
+        ctx.fillStyle = '#ffffff';
+        ctx.font = this.getSubPartFont(config, widgetKey, 'val', 'bold', 30);
+        const valStr = offUnit.hidden ? `${activity.avgHr}` : `${activity.avgHr} ${unitOverride}`;
+        ctx.fillText(valStr, textX + offVal.x, (isCenter ? y + gaugeH - 12 : y + 64) + offVal.y);
+        ctx.restore();
+      }
+
+      if (!offPeak.hidden && !isCenter) {
+        ctx.save();
+        this.applyZDepth(ctx, offPeak.z);
+        const peakX = isRight ? x + width - dialR * 2 - 40 : x + width - 20;
+        ctx.textAlign = 'right';
+        ctx.fillStyle = theme.textMuted;
+        ctx.font = this.getSubPartFont(config, widgetKey, 'peak', '600', 12);
+        const peakDefault = `MAX ${activity.maxHr} ${unitOverride}`;
+        const peakText = this.getTextOverride(config, widgetKey, 'peak', peakDefault);
+        ctx.fillText(peakText, peakX + offPeak.x, y + 48 + offPeak.y);
+        ctx.restore();
+      }
+
+      ctx.restore();
+      return y + gaugeH;
+    }
 
     if (design === 'centered-heart-crest') {
       // Centered Heart Crest (Glowing Heart & Centered BPM)

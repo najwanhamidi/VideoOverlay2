@@ -77,11 +77,14 @@ const state = {
     headerShowLocation: true,
     weatherText: '',
     customWatermark: '',
+    metricShowTime: true,
+    metricShowPace: true,
     metricShowHr: true,
     metricShowElevation: true,
     metricShowCadence: true,
     metricShowCalories: true,
-    metricShowBestPace: true,
+    metricShowDistance: false,
+    metricShowBestPace: false,
     // Custom Metric Labels (Multi-Language Overrides)
     labelDistance: '',
     labelTime: '',
@@ -329,13 +332,23 @@ function syncAllControlsWithConfig() {
     if (el) el.checked = cfg[key] !== false;
   });
 
-  // 6. Metrics Checkboxes
-  const metricToggles = [
-    'metricShowHr', 'metricShowElevation', 'metricShowCadence', 'metricShowCalories', 'metricShowBestPace',
+  // 6. Metrics Checkboxes (Sync across Format Tab, Widgets Tab, and Inspector)
+  const metricBinds = [
+    { key: 'metricShowTime', ids: ['metricToggleTime', 'wToggleMetricTime', 'insToggleMetricTime'], def: true },
+    { key: 'metricShowPace', ids: ['metricTogglePace', 'wToggleMetricPace', 'insToggleMetricPace'], def: true },
+    { key: 'metricShowHr', ids: ['metricToggleHr', 'wToggleMetricHr', 'insToggleMetricHr'], def: true },
+    { key: 'metricShowElevation', ids: ['metricToggleElevation', 'wToggleMetricElevation', 'insToggleMetricElevation'], def: true },
+    { key: 'metricShowCadence', ids: ['metricToggleCadence', 'wToggleMetricCadence', 'insToggleMetricCadence'], def: true },
+    { key: 'metricShowCalories', ids: ['metricToggleCalories', 'wToggleMetricCalories', 'insToggleMetricCalories'], def: true },
+    { key: 'metricShowDistance', ids: ['metricToggleDistance', 'wToggleMetricDistance', 'insToggleMetricDistance'], def: false },
+    { key: 'metricShowBestPace', ids: ['metricToggleBestPace', 'wToggleMetricBestPace', 'insToggleMetricBestPace'], def: false },
   ];
-  metricToggles.forEach((key) => {
-    const el = document.getElementById(key);
-    if (el) el.checked = cfg[key] !== false;
+  metricBinds.forEach(({ key, ids, def }) => {
+    const isVal = cfg[key] !== undefined ? Boolean(cfg[key]) : def;
+    ids.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.checked = isVal;
+    });
   });
 
   // 7. Splits Tab Checkboxes
@@ -932,6 +945,7 @@ function init() {
   window.selectWidget = selectWidget;
   window.centerWidget = centerWidget;
   window.triggerRender = triggerRender;
+  window.syncAllControlsWithConfig = syncAllControlsWithConfig;
   triggerRender();
 }
 
@@ -1568,11 +1582,14 @@ function extractTemplateConfig(cfg) {
     showWidgetAvgHrBadge: cfg.showWidgetAvgHrBadge !== false,
 
     // Metric items
+    metricShowTime: cfg.metricShowTime !== false,
+    metricShowPace: cfg.metricShowPace !== false,
     metricShowHr: cfg.metricShowHr !== false,
     metricShowElevation: cfg.metricShowElevation !== false,
     metricShowCadence: cfg.metricShowCadence !== false,
     metricShowCalories: cfg.metricShowCalories !== false,
-    metricShowBestPace: cfg.metricShowBestPace !== false,
+    metricShowDistance: Boolean(cfg.metricShowDistance),
+    metricShowBestPace: Boolean(cfg.metricShowBestPace),
 
     // Widget designs
     headerTemplate: cfg.headerTemplate || cfg.headerDesign || 'modern',
@@ -2311,6 +2328,89 @@ function setupWidgetsControls() {
     }
   });
 
+  // Secondary Metrics Individual Item Toggles and Presets
+  const metricBinds = [
+    { key: 'metricShowTime', ids: ['metricToggleTime', 'wToggleMetricTime', 'insToggleMetricTime'], def: true },
+    { key: 'metricShowPace', ids: ['metricTogglePace', 'wToggleMetricPace', 'insToggleMetricPace'], def: true },
+    { key: 'metricShowHr', ids: ['metricToggleHr', 'wToggleMetricHr', 'insToggleMetricHr'], def: true },
+    { key: 'metricShowElevation', ids: ['metricToggleElevation', 'wToggleMetricElevation', 'insToggleMetricElevation'], def: true },
+    { key: 'metricShowCadence', ids: ['metricToggleCadence', 'wToggleMetricCadence', 'insToggleMetricCadence'], def: true },
+    { key: 'metricShowCalories', ids: ['metricToggleCalories', 'wToggleMetricCalories', 'insToggleMetricCalories'], def: true },
+    { key: 'metricShowDistance', ids: ['metricToggleDistance', 'wToggleMetricDistance', 'insToggleMetricDistance'], def: false },
+    { key: 'metricShowBestPace', ids: ['metricToggleBestPace', 'wToggleMetricBestPace', 'insToggleMetricBestPace'], def: false },
+  ];
+
+  const setMetricItemVisibility = (metricKey, isVisible) => {
+    pushUndoSnapshot();
+    state.config[metricKey] = isVisible;
+    const bind = metricBinds.find((b) => b.key === metricKey);
+    if (bind) {
+      bind.ids.forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.checked = isVisible;
+      });
+    }
+    triggerRender();
+  };
+
+  metricBinds.forEach(({ key, ids }) => {
+    ids.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('change', (e) => {
+          setMetricItemVisibility(key, e.target.checked);
+        });
+      }
+    });
+  });
+
+  const applyMetricPreset = (preset) => {
+    pushUndoSnapshot();
+    if (preset === 'all') {
+      metricBinds.forEach(({ key, ids }) => {
+        state.config[key] = true;
+        ids.forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.checked = true;
+        });
+      });
+    } else if (preset === 'core') {
+      const coreKeys = ['metricShowTime', 'metricShowPace', 'metricShowHr'];
+      metricBinds.forEach(({ key, ids }) => {
+        const val = coreKeys.includes(key);
+        state.config[key] = val;
+        ids.forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.checked = val;
+        });
+      });
+    } else if (preset === 'telemetry') {
+      const telemetryKeys = ['metricShowHr', 'metricShowElevation', 'metricShowCadence', 'metricShowCalories'];
+      metricBinds.forEach(({ key, ids }) => {
+        const val = telemetryKeys.includes(key);
+        state.config[key] = val;
+        ids.forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.checked = val;
+        });
+      });
+    }
+    triggerRender();
+  };
+
+  ['metricsSelectAllBtn', 'inspectorMetricsSelectAllBtn'].forEach((id) => {
+    const btn = document.getElementById(id);
+    if (btn) btn.addEventListener('click', () => applyMetricPreset('all'));
+  });
+
+  ['metricsSelectCoreBtn', 'inspectorMetricsSelectCoreBtn'].forEach((id) => {
+    const btn = document.getElementById(id);
+    if (btn) btn.addEventListener('click', () => applyMetricPreset('core'));
+  });
+
+  const telemetryBtn = document.getElementById('metricsSelectTelemetryBtn');
+  if (telemetryBtn) telemetryBtn.addEventListener('click', () => applyMetricPreset('telemetry'));
+
   // Hero metric choice
   setupCardGrid('#heroMetricGrid', 'data-hero', (hero) => {
     pushUndoSnapshot();
@@ -2603,6 +2703,8 @@ function setupHeaderTemplateControls() {
         { value: 'running-bib-header', label: 'Marathon Race Bib Header (Bib Number & Stamped Seal)' },
         { value: 'broadcast-lowerthird', label: 'Esports / TV Broadcast Banner (Lower-Third Live Ribbon)' },
         { value: 'architect-monolith', label: 'Architectural Monolith (Big Calendar Block & Condensed Type)' },
+        { value: 'speed-chaser-bracket', label: 'Aerodynamic Speed Bracket (Racing Flags & Split Notch)' },
+        { value: 'editorial-vogue-minimal', label: 'Vogue Editorial (High-Fashion Serif & Golden Border Accent)' },
       ],
     },
     map: {
@@ -2623,6 +2725,8 @@ function setupHeaderTemplateControls() {
         { value: 'cyber-wireframe', label: 'Cyber Grid & Compass HUD (Telemetry Grid & Coordinates)' },
         { value: 'radar-screen', label: 'Tactical Radar Screen (Concentric Radar Rings & Beam)' },
         { value: 'vintage-topo-map', label: 'Topographic Elevation Contours (Organic Terrain Rings)' },
+        { value: 'isometric-shadow-track', label: 'Isometric 3D Track (Extruded Ground Shadow & Beacon)' },
+        { value: 'neon-wire-matrix', label: 'Neon Wireframe Matrix (Vector Grid & Digital Altitude Crossings)' },
       ],
     },
     hero: {
@@ -2651,6 +2755,8 @@ function setupHeaderTemplateControls() {
         { value: 'precision-hud-gauge', label: 'Precision Arc Gauge HUD (Dual Calibrated Dials)' },
         { value: 'tactical-crosshair', label: 'Tactical Crosshair Optic (Reticle & Corner Anchors)' },
         { value: 'angled-speed-slash', label: 'Dynamic Speed Slash (Athletic Slanted Gradient)' },
+        { value: 'kinetic-bold-slash', label: 'Kinetic Racing Split (45° High-Contrast Slanted Plate)' },
+        { value: 'neon-pulse-ring', label: 'Neon Pulse Halo (Radial Orbit Ring & Center Focal Stat)' },
       ],
     },
     metrics: {
@@ -2683,6 +2789,8 @@ function setupHeaderTemplateControls() {
         { value: 'horizontal-chips', label: 'Horizontal Stat Chips (Icon + Label + Value inline)' },
         { value: 'horizontal-slash-minimal', label: 'Horizontal Minimalist Slash (Clean Floating)' },
         { value: 'horizontal-linear-cards', label: 'Horizontal Leaderboard Rows (Left/Right)' },
+        { value: 'cyber-hex-matrix', label: 'Cyber Hexagon Honeycomb (Chamfered Tech Cells)' },
+        { value: 'minimal-wire-strip', label: 'Single-Line Wireframe Strip (Ultra-Thin Hairline Stream)' },
       ],
     },
     splits: {
@@ -2702,6 +2810,8 @@ function setupHeaderTemplateControls() {
         { value: 'vertical-split-cards', label: 'Vertical Split Cards (Stacked Interval Tiles with Delta)' },
         { value: 'split-ladder-timeline', label: 'Vertical Route Timeline (Mile/KM Route Wire)' },
         { value: 'compact-dot-matrix', label: 'Compact Pace Dot Matrix (Pace Intensity Grid)' },
+        { value: 'neon-speed-wave', label: 'Neon Speed Wave (Continuous Area Curve & Split Nodes)' },
+        { value: 'minimal-dot-timeline', label: 'Horizontal Pulse Track (Stepped Beads & Fastest Pill)' },
       ],
     },
     splitHighlight: {
@@ -2717,6 +2827,8 @@ function setupHeaderTemplateControls() {
         { value: 'polaroid-clip', label: 'Paper Note with Paperclip' },
         { value: 'trophy-cup', label: 'Trophy Podium Banner (Gold Ribbon & Fast Split)' },
         { value: 'split-terminal', label: 'Digital Split Terminal (Monospace Code Prompt)' },
+        { value: 'speed-record-banner', label: 'Golden Laurel Record Plaque (Embossed Wreath & Gold Star)' },
+        { value: 'minimal-focus-tag', label: 'Minimalist Floating Focus Tag (Ultra-Clean Monogram Badge)' },
       ],
     },
     elevation: {
@@ -2733,6 +2845,8 @@ function setupHeaderTemplateControls() {
         { value: 'mountain-peaks', label: 'Mountain Peaks & Summit Flag' },
         { value: 'stepped-bars', label: 'Stepped Altitude Columns (Quantized Terrain Bars)' },
         { value: 'dual-fill', label: 'Dual-Zone Climb & Descent Gradient (Ascent vs Descent)' },
+        { value: 'stepped-elevation-terrace', label: 'Stepped Topo Terrace (Stratified Altitude Slabs)' },
+        { value: 'cyber-altitude-grid', label: 'Cyber Altitude Grid (Matrix Wireframe & Summit Beacon)' },
       ],
     },
     paceGraph: {
@@ -2747,6 +2861,8 @@ function setupHeaderTemplateControls() {
         { value: 'line', label: 'Crisp High-Precision Line' },
         { value: 'gradient-zone', label: 'Multi-Zone Color Fill' },
         { value: 'stepped-splits', label: 'Stepped Splits with Avg Pace Dash' },
+        { value: 'candlestick-pace-bars', label: 'Pace Range Candlesticks (High/Low Interval Candles)' },
+        { value: 'neon-speed-ribbon', label: 'Neon Speed Ribbon (Dual-Stroke Glowing Stream)' },
       ],
     },
     hrGraph: {
@@ -2761,6 +2877,8 @@ function setupHeaderTemplateControls() {
         { value: 'ecg-wave', label: 'Colored ECG Wave (Zones)' },
         { value: 'zone-bars', label: '5-Zone Vertical Frequency Bars' },
         { value: 'pulse-glow', label: 'Glowing Pulse Wave with Alert' },
+        { value: 'ecg-cyber-pulse', label: 'ECG Bio-Telemetry Monitor (High-Frequency Pulse Grid)' },
+        { value: 'cardiac-zone-flame', label: 'Cardiac Thermal Heatmap (BPM Combustion Gradient)' },
       ],
     },
     hrBadge: {
@@ -2777,6 +2895,8 @@ function setupHeaderTemplateControls() {
         { value: 'compact-tag', label: 'Smartwatch Complication Tag' },
         { value: 'vertical-hr-thermometer', label: 'Vertical Zone Thermometer (5-Zone Meter Column)' },
         { value: 'tactical-ecg-card', label: 'ECG Telemetry Strip (Oscilloscope CRT Strip)' },
+        { value: 'minimal-cardiac-pill', label: 'Ultra-Minimal Cardiac Pill (Floating Pulse & BPM)' },
+        { value: 'cyber-hud-cardiac-gauge', label: 'Cyber Tactical Ring Gauge (Dual Segmented Arcs & Target Zone)' },
       ],
     },
     brand: {
@@ -3735,6 +3855,30 @@ function setupElementInspectorControls() {
         }
       } else {
         tmplContainer.style.display = 'none';
+      }
+    }
+
+    // Sync Secondary Metrics Item Toggles Container in Inspector
+    const insMetricsItemsContainer = document.getElementById('inspectorMetricsItemsContainer');
+    if (insMetricsItemsContainer) {
+      if (cat === 'metrics' || targetKey === 'metrics' || targetKey.startsWith('metrics')) {
+        insMetricsItemsContainer.style.display = 'block';
+        const metricBinds = [
+          { key: 'metricShowTime', id: 'insToggleMetricTime', def: true },
+          { key: 'metricShowPace', id: 'insToggleMetricPace', def: true },
+          { key: 'metricShowHr', id: 'insToggleMetricHr', def: true },
+          { key: 'metricShowElevation', id: 'insToggleMetricElevation', def: true },
+          { key: 'metricShowCadence', id: 'insToggleMetricCadence', def: true },
+          { key: 'metricShowCalories', id: 'insToggleMetricCalories', def: true },
+          { key: 'metricShowDistance', id: 'insToggleMetricDistance', def: false },
+          { key: 'metricShowBestPace', id: 'insToggleMetricBestPace', def: false },
+        ];
+        metricBinds.forEach(({ key, id, def }) => {
+          const el = document.getElementById(id);
+          if (el) el.checked = state.config[key] !== undefined ? Boolean(state.config[key]) : def;
+        });
+      } else {
+        insMetricsItemsContainer.style.display = 'none';
       }
     }
 

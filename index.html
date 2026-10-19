@@ -639,6 +639,48 @@
               </label>
             </div>
 
+            <!-- Secondary Metrics Widget Active Items Group -->
+            <div id="metricsItemsConfigGroup" style="margin: -6px 0 12px 32px; padding: 10px; background: rgba(255, 255, 255, 0.03); border-left: 2px solid var(--accent-volt); border-radius: 0 6px 6px 0;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600;">ACTIVE METRIC ITEMS:</span>
+                <span style="font-size: 0.68rem; color: var(--accent-volt);">Check to show</span>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;">
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; cursor: pointer;">
+                  <input type="checkbox" id="wToggleMetricTime" checked>
+                  <span>⏱️ Time</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; cursor: pointer;">
+                  <input type="checkbox" id="wToggleMetricPace" checked>
+                  <span>⚡ AVG Pace</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; cursor: pointer;">
+                  <input type="checkbox" id="wToggleMetricHr" checked>
+                  <span>❤️ AVG HR</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; cursor: pointer;">
+                  <input type="checkbox" id="wToggleMetricElevation" checked>
+                  <span>⛰️ Elev Gain</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; cursor: pointer;">
+                  <input type="checkbox" id="wToggleMetricCadence" checked>
+                  <span>👟 Cadence</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; cursor: pointer;">
+                  <input type="checkbox" id="wToggleMetricCalories" checked>
+                  <span>🔥 Calories</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; cursor: pointer;">
+                  <input type="checkbox" id="wToggleMetricDistance">
+                  <span>📍 Distance</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; cursor: pointer;">
+                  <input type="checkbox" id="wToggleMetricBestPace">
+                  <span>🚀 Best Pace</span>
+                </label>
+              </div>
+            </div>
+
             <!-- Splits Widget -->
             <div class="toggle-item">
               <div class="toggle-label-group">
@@ -821,6 +863,8 @@
                 <option value="running-bib-header">Marathon Race Bib Header (Bib Number & Stamped Seal)</option>
                 <option value="broadcast-lowerthird">Esports / TV Broadcast Banner (Lower-Third Live Ribbon)</option>
                 <option value="architect-monolith">Architectural Monolith (Big Calendar Block & Condensed Type)</option>
+                <option value="speed-chaser-bracket">Aerodynamic Speed Bracket (Racing Flags & Split Notch)</option>
+                <option value="editorial-vogue-minimal">Vogue Editorial (High-Fashion Serif & Golden Border Accent)</option>
               </select>
               <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px; padding: 5px 10px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 6px;">
                 <span style="font-size: 0.74rem; color: var(--text-normal);">📍 Show Location in Header</span>
@@ -844,6 +888,8 @@
                 <option value="cyber-wireframe">Cyber Grid & Compass HUD (Telemetry Grid & Coordinates)</option>
                 <option value="radar-screen">Tactical Radar Screen (Concentric Radar Rings & Beam)</option>
                 <option value="vintage-topo-map">Topographic Elevation Contours (Organic Terrain Rings)</option>
+                <option value="isometric-shadow-track">Isometric 3D Track (Extruded Ground Shadow & Beacon)</option>
+                <option value="neon-wire-matrix">Neon Wireframe Matrix (Vector Grid & Digital Altitude Crossings)</option>
               </select>
             </div>
 
@@ -870,6 +916,8 @@
                 <option value="precision-hud-gauge">Precision Arc Gauge HUD (Dual Calibrated Dials)</option>
                 <option value="tactical-crosshair">Tactical Crosshair Optic (Reticle & Corner Anchors)</option>
                 <option value="angled-speed-slash">Dynamic Speed Slash (Athletic Slanted Gradient)</option>
+                <option value="kinetic-bold-slash">Kinetic Racing Split (45° High-Contrast Slanted Plate)</option>
+                <option value="neon-pulse-ring">Neon Pulse Halo (Radial Orbit Ring & Center Focal Stat)</option>
               </select>
             </div>
 
@@ -901,7 +949,58 @@
                 <option value="horizontal-chips">Horizontal Stat Chips (Icon + Label + Value inline)</option>
                 <option value="horizontal-slash-minimal">Horizontal Minimalist Slash (Clean Floating)</option>
                 <option value="horizontal-linear-cards">Horizontal Leaderboard Rows (Left/Right)</option>
+                <option value="cyber-hex-matrix">Cyber Hexagon Honeycomb (Chamfered Tech Cells)</option>
+                <option value="minimal-wire-strip">Single-Line Wireframe Strip (Ultra-Thin Hairline Stream)</option>
               </select>
+            </div>
+
+            <!-- Secondary Metrics Custom Visibility Toggles (Enable / Disable any metric) -->
+            <div class="form-group" style="background: rgba(255, 255, 255, 0.03); padding: 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08); margin-top: -6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 4px;">
+                <label class="form-label" style="margin: 0; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; color: var(--accent-volt);">Visible Metric Items</label>
+                <div style="display: flex; gap: 4px;">
+                  <button type="button" id="metricsSelectAllBtn" class="btn btn-secondary" style="padding: 2px 6px; font-size: 0.68rem;" title="Enable all available metrics">All</button>
+                  <button type="button" id="metricsSelectCoreBtn" class="btn btn-secondary" style="padding: 2px 6px; font-size: 0.68rem;" title="Enable Time, Pace & HR">Core 3</button>
+                  <button type="button" id="metricsSelectTelemetryBtn" class="btn btn-secondary" style="padding: 2px 6px; font-size: 0.68rem;" title="Enable Pace, HR, Cadence, Elevation, Calories">Telemetry</button>
+                </div>
+              </div>
+              <div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 8px;">
+                Select which metrics to display across all secondary metric grid designs:
+              </div>
+              <div class="metrics-chip-toggle-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;">
+                <label class="metric-chip-label" style="display: flex; align-items: center; gap: 6px; background: rgba(255, 255, 255, 0.05); padding: 6px 8px; border-radius: 6px; font-size: 0.75rem; cursor: pointer;">
+                  <input type="checkbox" id="metricToggleTime" checked>
+                  <span>⏱️ Time</span>
+                </label>
+                <label class="metric-chip-label" style="display: flex; align-items: center; gap: 6px; background: rgba(255, 255, 255, 0.05); padding: 6px 8px; border-radius: 6px; font-size: 0.75rem; cursor: pointer;">
+                  <input type="checkbox" id="metricTogglePace" checked>
+                  <span>⚡ AVG Pace</span>
+                </label>
+                <label class="metric-chip-label" style="display: flex; align-items: center; gap: 6px; background: rgba(255, 255, 255, 0.05); padding: 6px 8px; border-radius: 6px; font-size: 0.75rem; cursor: pointer;">
+                  <input type="checkbox" id="metricToggleHr" checked>
+                  <span>❤️ AVG HR</span>
+                </label>
+                <label class="metric-chip-label" style="display: flex; align-items: center; gap: 6px; background: rgba(255, 255, 255, 0.05); padding: 6px 8px; border-radius: 6px; font-size: 0.75rem; cursor: pointer;">
+                  <input type="checkbox" id="metricToggleElevation" checked>
+                  <span>⛰️ Elev Gain</span>
+                </label>
+                <label class="metric-chip-label" style="display: flex; align-items: center; gap: 6px; background: rgba(255, 255, 255, 0.05); padding: 6px 8px; border-radius: 6px; font-size: 0.75rem; cursor: pointer;">
+                  <input type="checkbox" id="metricToggleCadence" checked>
+                  <span>👟 Cadence</span>
+                </label>
+                <label class="metric-chip-label" style="display: flex; align-items: center; gap: 6px; background: rgba(255, 255, 255, 0.05); padding: 6px 8px; border-radius: 6px; font-size: 0.75rem; cursor: pointer;">
+                  <input type="checkbox" id="metricToggleCalories" checked>
+                  <span>🔥 Calories</span>
+                </label>
+                <label class="metric-chip-label" style="display: flex; align-items: center; gap: 6px; background: rgba(255, 255, 255, 0.05); padding: 6px 8px; border-radius: 6px; font-size: 0.75rem; cursor: pointer;">
+                  <input type="checkbox" id="metricToggleDistance">
+                  <span>📍 Distance</span>
+                </label>
+                <label class="metric-chip-label" style="display: flex; align-items: center; gap: 6px; background: rgba(255, 255, 255, 0.05); padding: 6px 8px; border-radius: 6px; font-size: 0.75rem; cursor: pointer;">
+                  <input type="checkbox" id="metricToggleBestPace">
+                  <span>🚀 Best Pace</span>
+                </label>
+              </div>
             </div>
 
             <div class="form-group">
@@ -919,6 +1018,8 @@
                 <option value="vertical-split-cards">Vertical Split Cards (Stacked Interval Tiles with Delta)</option>
                 <option value="split-ladder-timeline">Vertical Route Timeline (Mile/KM Route Wire)</option>
                 <option value="compact-dot-matrix">Compact Pace Dot Matrix (Pace Intensity Grid)</option>
+                <option value="neon-speed-wave">Neon Speed Wave (Continuous Area Curve & Split Nodes)</option>
+                <option value="minimal-dot-timeline">Horizontal Pulse Track (Stepped Beads & Fastest Pill)</option>
               </select>
             </div>
 
@@ -932,6 +1033,8 @@
                 <option value="polaroid-clip">Paper Note with Paperclip</option>
                 <option value="trophy-cup">Trophy Podium Banner (Gold Ribbon & Fast Split)</option>
                 <option value="split-terminal">Digital Split Terminal (Monospace Code Prompt)</option>
+                <option value="speed-record-banner">Golden Laurel Record Plaque (Embossed Wreath & Gold Star)</option>
+                <option value="minimal-focus-tag">Minimalist Floating Focus Tag (Ultra-Clean Monogram Badge)</option>
               </select>
             </div>
 
@@ -947,6 +1050,8 @@
                 <option value="mountain-peaks">Mountain Peaks & Summit Flag</option>
                 <option value="stepped-bars">Stepped Altitude Columns (Quantized Terrain Bars)</option>
                 <option value="dual-fill">Dual-Zone Climb & Descent Gradient (Ascent vs Descent)</option>
+                <option value="stepped-elevation-terrace">Stepped Topo Terrace (Stratified Altitude Slabs)</option>
+                <option value="cyber-altitude-grid">Cyber Altitude Grid (Matrix Wireframe & Summit Beacon)</option>
               </select>
             </div>
 
@@ -960,6 +1065,8 @@
                 <option value="line">Crisp High-Precision Line</option>
                 <option value="gradient-zone">Multi-Zone Color Fill</option>
                 <option value="stepped-splits">Stepped Splits with Avg Pace Dash</option>
+                <option value="candlestick-pace-bars">Pace Range Candlesticks (High/Low Interval Candles)</option>
+                <option value="neon-speed-ribbon">Neon Speed Ribbon (Dual-Stroke Glowing Stream)</option>
               </select>
             </div>
 
@@ -973,6 +1080,8 @@
                 <option value="ecg-wave">Colored ECG Wave (Zones)</option>
                 <option value="zone-bars">5-Zone Vertical Frequency Bars</option>
                 <option value="pulse-glow">Glowing Pulse Wave with Alert</option>
+                <option value="ecg-cyber-pulse">ECG Bio-Telemetry Monitor (High-Frequency Pulse Grid)</option>
+                <option value="cardiac-zone-flame">Cardiac Thermal Heatmap (BPM Combustion Gradient)</option>
               </select>
             </div>
 
@@ -988,6 +1097,8 @@
                 <option value="compact-tag">Smartwatch Complication Tag</option>
                 <option value="vertical-hr-thermometer">Vertical Zone Thermometer (5-Zone Meter Column)</option>
                 <option value="tactical-ecg-card">ECG Telemetry Strip (Oscilloscope CRT Strip)</option>
+                <option value="minimal-cardiac-pill">Ultra-Minimal Cardiac Pill (Floating Pulse & BPM)</option>
+                <option value="cyber-hud-cardiac-gauge">Cyber Tactical Ring Gauge (Dual Segmented Arcs & Target Zone)</option>
               </select>
             </div>
           </div>
@@ -1170,6 +1281,54 @@
                 <select id="inspectorExtraFieldSelect" class="form-select" style="font-size: 0.8rem;">
                   <!-- Dynamically populated if hero, splitHighlight, etc. -->
                 </select>
+              </div>
+            </div>
+
+            <!-- Secondary Metrics Item Toggles (When Metrics Widget is selected in Inspector) -->
+            <div id="inspectorMetricsItemsContainer" class="form-group" style="display: none; background: rgba(204, 255, 0, 0.04); border: 1px solid rgba(204, 255, 0, 0.25); border-radius: 8px; padding: 10px; margin-bottom: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 4px;">
+                <span style="font-size: 0.75rem; font-weight: 700; color: var(--accent-volt);">📊 Visible Metric Items</span>
+                <div style="display: flex; gap: 4px;">
+                  <button type="button" id="inspectorMetricsSelectAllBtn" class="btn btn-secondary" style="padding: 1px 6px; font-size: 0.68rem;">All</button>
+                  <button type="button" id="inspectorMetricsSelectCoreBtn" class="btn btn-secondary" style="padding: 1px 6px; font-size: 0.68rem;">Core 3</button>
+                </div>
+              </div>
+              <div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 8px;">
+                Toggle individual metrics to show in this grid layout:
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;">
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.73rem; cursor: pointer;">
+                  <input type="checkbox" id="insToggleMetricTime" checked>
+                  <span>⏱️ Time</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.73rem; cursor: pointer;">
+                  <input type="checkbox" id="insToggleMetricPace" checked>
+                  <span>⚡ AVG Pace</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.73rem; cursor: pointer;">
+                  <input type="checkbox" id="insToggleMetricHr" checked>
+                  <span>❤️ AVG HR</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.73rem; cursor: pointer;">
+                  <input type="checkbox" id="insToggleMetricElevation" checked>
+                  <span>⛰️ Elev Gain</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.73rem; cursor: pointer;">
+                  <input type="checkbox" id="insToggleMetricCadence" checked>
+                  <span>👟 Cadence</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.73rem; cursor: pointer;">
+                  <input type="checkbox" id="insToggleMetricCalories" checked>
+                  <span>🔥 Calories</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.73rem; cursor: pointer;">
+                  <input type="checkbox" id="insToggleMetricDistance">
+                  <span>📍 Distance</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.73rem; cursor: pointer;">
+                  <input type="checkbox" id="insToggleMetricBestPace">
+                  <span>🚀 Best Pace</span>
+                </label>
               </div>
             </div>
 
