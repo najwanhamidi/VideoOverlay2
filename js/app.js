@@ -3206,6 +3206,7 @@ function setupWeeklyControls() {
     renderWeeklyRunsList();
 
     if (typeof syncTextCustomizerUI === 'function') syncTextCustomizerUI();
+    if (typeof syncCardCustomizerUI === 'function') syncCardCustomizerUI();
 
     triggerRender();
 
@@ -3657,7 +3658,42 @@ function setupWeeklyControls() {
 
 
 
-  const resetCurrentTextBtn = document.getElementById('weeklyResetCurrentTextBtn');
+    const weeklyTextBadgeBorderToggle = document.getElementById('weeklyTextBadgeBorderToggle');
+  const weeklyTextBadgeBorderColor = document.getElementById('weeklyTextBadgeBorderColor');
+  const weeklyTextBadgeBorderWidth = document.getElementById('weeklyTextBadgeBorderWidth');
+  const weeklyTextBadgeBorderWidthVal = document.getElementById('weeklyTextBadgeBorderWidthVal');
+
+  // Card Elements & Borders DOM Controls
+  const weeklyCardTargetSelect = document.getElementById('weeklyCardTargetSelect');
+  const weeklyCardShowBorder = document.getElementById('weeklyCardShowBorder');
+  const weeklyCardBorderWidth = document.getElementById('weeklyCardBorderWidth');
+  const weeklyCardBorderWidthNum = document.getElementById('weeklyCardBorderWidthNum');
+  const weeklyCardBorderWidthVal = document.getElementById('weeklyCardBorderWidthVal');
+  const weeklyCardBorderColorPicker = document.getElementById('weeklyCardBorderColorPicker');
+  const weeklyCardBorderColorHex = document.getElementById('weeklyCardBorderColorHex');
+  const weeklyCardRadius = document.getElementById('weeklyCardRadius');
+  const weeklyCardRadiusVal = document.getElementById('weeklyCardRadiusVal');
+  const weeklyCardOffsetX = document.getElementById('weeklyCardOffsetX');
+  const weeklyCardOffsetXNum = document.getElementById('weeklyCardOffsetXNum');
+  const weeklyCardOffsetXVal = document.getElementById('weeklyCardOffsetXVal');
+  const weeklyCardOffsetY = document.getElementById('weeklyCardOffsetY');
+  const weeklyCardOffsetYNum = document.getElementById('weeklyCardOffsetYNum');
+  const weeklyCardOffsetYVal = document.getElementById('weeklyCardOffsetYVal');
+  const weeklyCardWidthDelta = document.getElementById('weeklyCardWidthDelta');
+  const weeklyCardWidthDeltaNum = document.getElementById('weeklyCardWidthDeltaNum');
+  const weeklyCardWidthDeltaVal = document.getElementById('weeklyCardWidthDeltaVal');
+  const weeklyCardHeightDelta = document.getElementById('weeklyCardHeightDelta');
+  const weeklyCardHeightDeltaNum = document.getElementById('weeklyCardHeightDeltaNum');
+  const weeklyCardHeightDeltaVal = document.getElementById('weeklyCardHeightDeltaVal');
+  const weeklyResetCardSizeBtn = document.getElementById('weeklyResetCardSizeBtn');
+  const weeklyCardShowBg = document.getElementById('weeklyCardShowBg');
+  const weeklyCardBgColorPicker = document.getElementById('weeklyCardBgColorPicker');
+  const weeklyCardBgOpacity = document.getElementById('weeklyCardBgOpacity');
+  const weeklyCardBgOpacityVal = document.getElementById('weeklyCardBgOpacityVal');
+  const weeklyResetCurrentCardBtn = document.getElementById('weeklyResetCurrentCardBtn');
+  const weeklyResetAllCardsBtn = document.getElementById('weeklyResetAllCardsBtn');
+  const cardColorChips = document.querySelectorAll('.weekly-card-color-chip');
+const resetCurrentTextBtn = document.getElementById('weeklyResetCurrentTextBtn');
 
   const resetAllTextsBtn = document.getElementById('weeklyResetAllTextsBtn');
 
@@ -3849,7 +3885,18 @@ function setupWeeklyControls() {
 
     if (weeklyTextBadgeRadiusVal) weeklyTextBadgeRadiusVal.textContent = `${bRad}px`;
 
-  }
+  
+    // Badge Border Sync
+    const hasBadgeBorder = (st.badge && st.badge.borderEnabled !== undefined)
+      ? !!st.badge.borderEnabled
+      : (st.badgeBorderEnabled !== undefined ? !!st.badgeBorderEnabled : (typeof st.badgeBorderWidth === 'number' && st.badgeBorderWidth > 0));
+    if (weeklyTextBadgeBorderToggle) weeklyTextBadgeBorderToggle.checked = hasBadgeBorder;
+    const bbCol = (st.badge && st.badge.borderColor) || st.badgeBorderColor || '#ffffff';
+    if (weeklyTextBadgeBorderColor) weeklyTextBadgeBorderColor.value = bbCol.startsWith('#') && bbCol.length === 7 ? bbCol : '#ffffff';
+    const bbW = (st.badge && typeof st.badge.borderWidth === 'number') ? st.badge.borderWidth : (typeof st.badgeBorderWidth === 'number' ? st.badgeBorderWidth : 1.5);
+    if (weeklyTextBadgeBorderWidth) weeklyTextBadgeBorderWidth.value = bbW;
+    if (weeklyTextBadgeBorderWidthVal) weeklyTextBadgeBorderWidthVal.textContent = `${bbW}px`;
+}
 
 
 
@@ -3873,6 +3920,181 @@ function setupWeeklyControls() {
 
 
 
+
+  // ==========================================
+  // BULK SELECTION & SIMILAR ITEM HELPERS
+  // ==========================================
+  window.weeklyMultiSelectMode = false;
+
+  function getSimilarTextKeys(key, availableKeys) {
+    if (!key || !availableKeys || availableKeys.length === 0) return [key];
+
+    // 1. Run items (titles, dates, stats, dist, time, pace)
+    const runMatch = key.match(/^([a-zA-Z]+)_(\d+)$/);
+    if (runMatch) {
+      const prefix = runMatch[1];
+      const exactMatches = availableKeys.filter(k => k.startsWith(prefix + '_'));
+      if (exactMatches.length > 1) {
+        return exactMatches;
+      }
+      const pLower = prefix.toLowerCase();
+      if (pLower.includes('title')) return availableKeys.filter(k => k.toLowerCase().includes('title'));
+      if (pLower.includes('date')) return availableKeys.filter(k => k.toLowerCase().includes('date'));
+      if (pLower.includes('dist') || pLower.includes('stats')) return availableKeys.filter(k => k.toLowerCase().includes('dist') || k.toLowerCase().includes('stats'));
+      if (pLower.includes('pace')) return availableKeys.filter(k => k.toLowerCase().includes('pace'));
+      if (pLower.includes('time')) return availableKeys.filter(k => k.toLowerCase().includes('time'));
+      return exactMatches.length > 0 ? exactMatches : [key];
+    }
+
+    // 2. Day bar values
+    if (key.match(/^(dailyDayValue|pillarValue|calendarDayValue|hudEqValue)_([A-Za-z]+)$/)) {
+      const type = key.split('_')[0];
+      const matches = availableKeys.filter(k => k.startsWith(type + '_'));
+      if (matches.length > 0) return matches;
+    }
+
+    // 3. Day labels
+    if (key.match(/^(dailyDayLabel|pillarLabel|calendarDayLabel|hudEqLabel)_([A-Za-z]+)$/)) {
+      const type = key.split('_')[0];
+      const matches = availableKeys.filter(k => k.startsWith(type + '_'));
+      if (matches.length > 0) return matches;
+    }
+
+    // 4. KPI values
+    const kpiValues = ['distValue', 'timeValue', 'paceValue', 'hrValue', 'elevValue', 'calValue', 'countValue'];
+    if (kpiValues.includes(key)) {
+      const matches = availableKeys.filter(k => kpiValues.includes(k));
+      if (matches.length > 0) return matches;
+    }
+
+    // 5. KPI labels
+    const kpiLabels = ['distLabel', 'timeLabel', 'paceLabel', 'hrLabel', 'elevLabel', 'calLabel', 'countLabel', 'distUnit'];
+    if (kpiLabels.includes(key)) {
+      const matches = availableKeys.filter(k => kpiLabels.includes(k));
+      if (matches.length > 0) return matches;
+    }
+
+    // 6. Section headers & subheaders
+    const headerKeys = ['weeklyTitle', 'weeklySubtitle', 'weeklyTag', 'dailyBarsTitle', 'goalText'];
+    if (headerKeys.includes(key)) {
+      return availableKeys.filter(k => headerKeys.includes(k));
+    }
+
+    return [key];
+  }
+  window.getSimilarTextKeys = getSimilarTextKeys;
+
+  function getWeeklySelectedItems() {
+    const textKeys = (state.weeklyData && Array.isArray(state.weeklyData.selectedTextKeys))
+      ? [...state.weeklyData.selectedTextKeys]
+      : (state.weeklyData && state.weeklyData.selectedTextKey ? [state.weeklyData.selectedTextKey] : []);
+    const cardKeys = (state.weeklyData && Array.isArray(state.weeklyData.selectedCardKeys))
+      ? [...state.weeklyData.selectedCardKeys]
+      : (state.weeklyData && state.weeklyData.selectedCardKey ? [state.weeklyData.selectedCardKey] : []);
+    return { textKeys, cardKeys };
+  }
+  window.getWeeklySelectedItems = getWeeklySelectedItems;
+
+  function selectWeeklyItemsBulk({ textKeys = [], cardKeys = [] }) {
+    if (!state.weeklyData) return;
+    state.weeklyData.selectedTextKeys = [...new Set(textKeys)];
+    state.weeklyData.selectedCardKeys = [...new Set(cardKeys)];
+    state.weeklyData.selectedTextKey = textKeys.length > 0 ? textKeys[0] : null;
+    state.weeklyData.selectedCardKey = cardKeys.length > 0 ? cardKeys[0] : null;
+
+    if (state.weeklyData.selectedTextKey && textTargetSelect) {
+      textTargetSelect.value = state.weeklyData.selectedTextKey;
+      syncTextCustomizerUI();
+    }
+    if (state.weeklyData.selectedCardKey && weeklyCardTargetSelect) {
+      weeklyCardTargetSelect.value = state.weeklyData.selectedCardKey;
+      syncCardCustomizerUI();
+    }
+    updateMultiSelectUI();
+    triggerRender();
+  }
+  window.selectWeeklyItemsBulk = selectWeeklyItemsBulk;
+
+  function clearWeeklySelection() {
+    if (!state.weeklyData) return;
+    state.weeklyData.selectedTextKey = null;
+    state.weeklyData.selectedTextKeys = [];
+    state.weeklyData.selectedCardKey = null;
+    state.weeklyData.selectedCardKeys = [];
+    updateMultiSelectUI();
+    triggerRender();
+  }
+  window.clearWeeklySelection = clearWeeklySelection;
+
+  function toggleWeeklyItemSelection(type, key) {
+    if (!state.weeklyData) return;
+    const { textKeys, cardKeys } = getWeeklySelectedItems();
+    if (type === 'text') {
+      const idx = textKeys.indexOf(key);
+      if (idx >= 0) textKeys.splice(idx, 1);
+      else textKeys.push(key);
+    } else if (type === 'card') {
+      const idx = cardKeys.indexOf(key);
+      if (idx >= 0) cardKeys.splice(idx, 1);
+      else cardKeys.push(key);
+    }
+    selectWeeklyItemsBulk({ textKeys, cardKeys });
+  }
+  window.toggleWeeklyItemSelection = toggleWeeklyItemSelection;
+
+  function updateMultiSelectUI() {
+    const countBadge = document.getElementById('weeklySelectionCountBadge');
+    const multiIcon = document.getElementById('weeklyMultiSelectIcon');
+    const multiText = document.getElementById('weeklyMultiSelectText');
+    const toggleBtn = document.getElementById('weeklyMultiSelectToggleBtn');
+
+    const { textKeys, cardKeys } = getWeeklySelectedItems();
+    const total = textKeys.length + cardKeys.length;
+
+    if (countBadge) {
+      if (total > 1) {
+        countBadge.style.display = 'inline-block';
+        countBadge.textContent = `${total} items selected`;
+      } else {
+        countBadge.style.display = 'none';
+      }
+    }
+
+    if (multiIcon && multiText && toggleBtn) {
+      if (window.weeklyMultiSelectMode) {
+        multiIcon.textContent = '🟢';
+        multiText.textContent = 'Multi-Select: ON';
+        toggleBtn.style.background = 'rgba(204, 255, 0, 0.2)';
+        toggleBtn.style.borderColor = 'var(--accent-volt)';
+      } else {
+        multiIcon.textContent = '🔘';
+        multiText.textContent = 'Multi-Select: OFF';
+        toggleBtn.style.background = '';
+        toggleBtn.style.borderColor = '';
+      }
+    }
+  }
+  window.updateMultiSelectUI = updateMultiSelectUI;
+  function updateActiveTextStyles(keys, updater) {
+    if (!state.weeklyData || !keys || keys.length === 0) return;
+    if (!window._weeklyTextEditInProgress) {
+      pushWeeklyUndoSnapshot();
+      window._weeklyTextEditInProgress = true;
+    }
+    clearTimeout(weeklyTextUndoDebounce);
+    weeklyTextUndoDebounce = setTimeout(() => {
+      window._weeklyTextEditInProgress = false;
+    }, 1000);
+
+    keys.forEach(k => {
+      const st = getTextStyle(k, true);
+      updater(st);
+    });
+
+    triggerRender();
+    autoSaveWeeklyDraft();
+  }
+  window.updateActiveTextStyles = updateActiveTextStyles;
   let weeklyTextUndoDebounce = null;
   function updateActiveTextStyle(updater) {
     if (!state.weeklyData) return;
@@ -3919,22 +4141,94 @@ function setupWeeklyControls() {
 
     });
 
-  }
-
-
-
-  if (fontSizeScale) {
-
+  }  if (fontSizeScale) {
     fontSizeScale.addEventListener('input', () => {
-
       const val = parseFloat(fontSizeScale.value);
-
       if (fontSizeScaleVal) fontSizeScaleVal.textContent = `${val.toFixed(2)}x`;
 
-      updateActiveTextStyle((st) => { st.sizeScale = val; });
+      const targetKey = getActiveTextKey();
+      const allTextKeys = Object.keys(renderer.weeklyTextBounds || {});
+      const syncSimilarToggle = document.getElementById('weeklySyncSimilarSizeToggle');
+      const syncSimilar = syncSimilarToggle ? syncSimilarToggle.checked : true;
 
+      const { textKeys } = getWeeklySelectedItems();
+      let targetKeys = [];
+      if (textKeys && textKeys.length > 1) {
+        targetKeys = textKeys;
+      } else if (syncSimilar) {
+        targetKeys = getSimilarTextKeys(targetKey, allTextKeys);
+      } else {
+        targetKeys = [targetKey];
+      }
+
+      updateActiveTextStyles(targetKeys, (st) => {
+        st.sizeScale = val;
+      });
     });
+  }
 
+  // Bulk Text Toolbar Buttons Wiring
+  const weeklyMultiSelectToggleBtn = document.getElementById('weeklyMultiSelectToggleBtn');
+  if (weeklyMultiSelectToggleBtn) {
+    weeklyMultiSelectToggleBtn.addEventListener('click', () => {
+      window.weeklyMultiSelectMode = !window.weeklyMultiSelectMode;
+      updateMultiSelectUI();
+      showToast(window.weeklyMultiSelectMode ? 'Multi-Select Mode ON: Click/tap elements to add or remove' : 'Multi-Select Mode OFF');
+    });
+  }
+
+  const weeklySelectSimilarBtn = document.getElementById('weeklySelectSimilarBtn');
+  if (weeklySelectSimilarBtn) {
+    weeklySelectSimilarBtn.addEventListener('click', () => {
+      const targetKey = getActiveTextKey();
+      const allTextKeys = Object.keys(renderer.weeklyTextBounds || {});
+      const similarKeys = getSimilarTextKeys(targetKey, allTextKeys);
+      if (similarKeys.length > 0) {
+        selectWeeklyItemsBulk({ textKeys: similarKeys, cardKeys: [] });
+        showToast(`Selected ${similarKeys.length} similar text elements`);
+      }
+    });
+  }
+
+  const weeklyClearSelectionBtn = document.getElementById('weeklyClearSelectionBtn');
+  if (weeklyClearSelectionBtn) {
+    weeklyClearSelectionBtn.addEventListener('click', () => {
+      clearWeeklySelection();
+      showToast('Cleared selection');
+    });
+  }
+
+  const weeklyApplySizeToSimilarBtn = document.getElementById('weeklyApplySizeToSimilarBtn');
+  if (weeklyApplySizeToSimilarBtn) {
+    weeklyApplySizeToSimilarBtn.addEventListener('click', () => {
+      const targetKey = getActiveTextKey();
+      const curStyle = getTextStyle(targetKey, false);
+      const curScale = typeof curStyle.sizeScale === 'number' ? curStyle.sizeScale : 1.0;
+      const allTextKeys = Object.keys(renderer.weeklyTextBounds || {});
+      const similarKeys = getSimilarTextKeys(targetKey, allTextKeys);
+
+      pushWeeklyUndoSnapshot();
+      similarKeys.forEach(k => {
+        const st = getTextStyle(k, true);
+        st.sizeScale = curScale;
+        if (curStyle.fontFamily) st.fontFamily = curStyle.fontFamily;
+      });
+      triggerRender();
+      autoSaveWeeklyDraft();
+      showToast(`Applied ${curScale.toFixed(2)}x size to ${similarKeys.length} similar items!`);
+    });
+  }
+
+  const weeklySelectAllCardsBtn = document.getElementById('weeklySelectAllCardsBtn');
+  if (weeklySelectAllCardsBtn) {
+    weeklySelectAllCardsBtn.addEventListener('click', () => {
+      if (!state.weeklyData) return;
+      const allCardKeys = Object.keys(renderer.weeklyCardBounds || {});
+      if (allCardKeys.length > 0) {
+        selectWeeklyItemsBulk({ textKeys: [], cardKeys: allCardKeys });
+        showToast(`Selected all ${allCardKeys.length} cards (drag any to move all)`);
+      }
+    });
   }
 
 
@@ -3987,38 +4281,42 @@ function setupWeeklyControls() {
 
     });
 
-  });
-
-
-
-  if (textOffsetX) {
-
+  });  if (textOffsetX) {
     textOffsetX.addEventListener('input', () => {
-
       const val = parseInt(textOffsetX.value, 10);
-
       if (textOffsetXVal) textOffsetXVal.textContent = `${val}px`;
-
-      updateActiveTextStyle((st) => { st.offsetX = val; });
-
+      const { textKeys } = getWeeklySelectedItems();
+      if (textKeys && textKeys.length > 1) {
+        const activeKey = getActiveTextKey();
+        const activeSt = getTextStyle(activeKey, true);
+        const prevOX = typeof activeSt.offsetX === 'number' ? activeSt.offsetX : 0;
+        const dX = val - prevOX;
+        updateActiveTextStyles(textKeys, (st) => {
+          st.offsetX = (typeof st.offsetX === 'number' ? st.offsetX : 0) + dX;
+        });
+      } else {
+        updateActiveTextStyle((st) => { st.offsetX = val; });
+      }
     });
-
   }
 
-
-
   if (textOffsetY) {
-
     textOffsetY.addEventListener('input', () => {
-
       const val = parseInt(textOffsetY.value, 10);
-
       if (textOffsetYVal) textOffsetYVal.textContent = `${val}px`;
-
-      updateActiveTextStyle((st) => { st.offsetY = val; });
-
+      const { textKeys } = getWeeklySelectedItems();
+      if (textKeys && textKeys.length > 1) {
+        const activeKey = getActiveTextKey();
+        const activeSt = getTextStyle(activeKey, true);
+        const prevOY = typeof activeSt.offsetY === 'number' ? activeSt.offsetY : 0;
+        const dY = val - prevOY;
+        updateActiveTextStyles(textKeys, (st) => {
+          st.offsetY = (typeof st.offsetY === 'number' ? st.offsetY : 0) + dY;
+        });
+      } else {
+        updateActiveTextStyle((st) => { st.offsetY = val; });
+      }
     });
-
   }
 
 
@@ -4392,7 +4690,892 @@ function setupWeeklyControls() {
 
 
 
+  
   // ==========================================
+  // BADGE BORDER CONTROLS LISTENERS
+  // ==========================================
+  if (weeklyTextBadgeBorderToggle) {
+    weeklyTextBadgeBorderToggle.addEventListener('change', (e) => {
+      const targetKey = getActiveTextKey();
+      const st = getTextStyle(targetKey, true);
+      st.badge = st.badge || {};
+      st.badge.borderEnabled = e.target.checked;
+      st.badgeBorderEnabled = e.target.checked;
+      pushWeeklyUndoSnapshot();
+      triggerRender();
+      autoSaveWeeklyDraft();
+    });
+  }
+
+  if (weeklyTextBadgeBorderColor) {
+    weeklyTextBadgeBorderColor.addEventListener('input', (e) => {
+      const targetKey = getActiveTextKey();
+      const st = getTextStyle(targetKey, true);
+      st.badge = st.badge || {};
+      st.badge.borderColor = e.target.value;
+      st.badgeBorderColor = e.target.value;
+      triggerRender();
+    });
+    weeklyTextBadgeBorderColor.addEventListener('change', () => {
+      pushWeeklyUndoSnapshot();
+      autoSaveWeeklyDraft();
+    });
+  }
+
+  if (weeklyTextBadgeBorderWidth) {
+    weeklyTextBadgeBorderWidth.addEventListener('input', (e) => {
+      const targetKey = getActiveTextKey();
+      const st = getTextStyle(targetKey, true);
+      const val = parseFloat(e.target.value);
+      st.badge = st.badge || {};
+      st.badge.borderWidth = val;
+      st.badgeBorderWidth = val;
+      if (weeklyTextBadgeBorderWidthVal) weeklyTextBadgeBorderWidthVal.textContent = `${val}px`;
+      triggerRender();
+    });
+    weeklyTextBadgeBorderWidth.addEventListener('change', () => {
+      pushWeeklyUndoSnapshot();
+      autoSaveWeeklyDraft();
+    });
+  }
+
+  // ==========================================
+  // CARD ELEMENTS & BORDERS CUSTOMIZER LOGIC
+  // ==========================================
+  function getActiveCardKey() {
+    if (state.weeklyData && state.weeklyData.selectedCardKey) {
+      return state.weeklyData.selectedCardKey;
+    }
+    return (weeklyCardTargetSelect && weeklyCardTargetSelect.value) || 'allCards';
+  }
+
+  function getCardStyle(targetKey = 'allCards', createIfMissing = false) {
+    if (!state.weeklyData) return {};
+    state.weeklyData.cardStyles = state.weeklyData.cardStyles || {};
+    if (!state.weeklyData.cardStyles[targetKey]) {
+      if (createIfMissing) {
+        state.weeklyData.cardStyles[targetKey] = {};
+      } else {
+        return {};
+      }
+    }
+    return state.weeklyData.cardStyles[targetKey];
+  }
+
+  function syncCardCustomizerUI() {
+    const targetKey = getActiveCardKey();
+    const cs = getCardStyle(targetKey, false);
+    const globalCs = targetKey !== 'allCards' ? getCardStyle('allCards', false) : {};
+
+    // Show Border
+    const showBorder = cs.showBorder !== undefined ? !!cs.showBorder : (globalCs.showBorder !== undefined ? !!globalCs.showBorder : true);
+    if (weeklyCardShowBorder) weeklyCardShowBorder.checked = showBorder;
+
+    // Border Width
+    const bW = typeof cs.borderWidth === 'number' ? cs.borderWidth : (typeof globalCs.borderWidth === 'number' ? globalCs.borderWidth : 1);
+    if (weeklyCardBorderWidth) weeklyCardBorderWidth.value = bW;
+    if (weeklyCardBorderWidthNum) weeklyCardBorderWidthNum.value = bW;
+    if (weeklyCardBorderWidthVal) weeklyCardBorderWidthVal.textContent = `${bW}px`;
+
+    // Border Color
+    const bCol = cs.borderColor || globalCs.borderColor || '#ffffff';
+    if (weeklyCardBorderColorPicker) weeklyCardBorderColorPicker.value = bCol.startsWith('#') && bCol.length === 7 ? bCol : '#ffffff';
+    if (weeklyCardBorderColorHex) weeklyCardBorderColorHex.value = cs.borderColor || globalCs.borderColor || '';
+
+    // Radius
+    const rad = typeof cs.radius === 'number' ? cs.radius : (typeof globalCs.radius === 'number' ? globalCs.radius : 14);
+    if (weeklyCardRadius) weeklyCardRadius.value = rad;
+    if (weeklyCardRadiusVal) weeklyCardRadiusVal.textContent = `${rad}px`;
+
+    // Offsets
+    const ox = typeof cs.offsetX === 'number' ? cs.offsetX : 0;
+    const oy = typeof cs.offsetY === 'number' ? cs.offsetY : 0;
+    if (weeklyCardOffsetX) weeklyCardOffsetX.value = ox;
+    if (weeklyCardOffsetXNum) weeklyCardOffsetXNum.value = ox;
+    if (weeklyCardOffsetXVal) weeklyCardOffsetXVal.textContent = `${ox}px`;
+    if (weeklyCardOffsetY) weeklyCardOffsetY.value = oy;
+    if (weeklyCardOffsetYNum) weeklyCardOffsetYNum.value = oy;
+    if (weeklyCardOffsetYVal) weeklyCardOffsetYVal.textContent = `${oy}px`;
+
+    // Width & Height Deltas
+    const wDelta = typeof cs.widthDelta === 'number' ? cs.widthDelta : 0;
+    const hDelta = typeof cs.heightDelta === 'number' ? cs.heightDelta : 0;
+    if (weeklyCardWidthDelta) weeklyCardWidthDelta.value = wDelta;
+    if (weeklyCardWidthDeltaNum) weeklyCardWidthDeltaNum.value = wDelta;
+    if (weeklyCardWidthDeltaVal) weeklyCardWidthDeltaVal.textContent = `${wDelta >= 0 ? '+' : ''}${wDelta}px`;
+    if (weeklyCardHeightDelta) weeklyCardHeightDelta.value = hDelta;
+    if (weeklyCardHeightDeltaNum) weeklyCardHeightDeltaNum.value = hDelta;
+    if (weeklyCardHeightDeltaVal) weeklyCardHeightDeltaVal.textContent = `${hDelta >= 0 ? '+' : ''}${hDelta}px`;
+
+    // Show Background Fill
+    const showBg = cs.showBg !== undefined ? !!cs.showBg : (globalCs.showBg !== undefined ? !!globalCs.showBg : true);
+    if (weeklyCardShowBg) weeklyCardShowBg.checked = showBg;
+
+    // Background Color & Opacity
+    const fillCol = cs.fillColor || globalCs.fillColor || '#0f111a';
+    if (weeklyCardBgColorPicker) weeklyCardBgColorPicker.value = fillCol.startsWith('#') && fillCol.length === 7 ? fillCol : '#0f111a';
+    const bgOp = typeof cs.bgOpacity === 'number' ? cs.bgOpacity : (typeof globalCs.bgOpacity === 'number' ? globalCs.bgOpacity : 0.75);
+    if (weeklyCardBgOpacity) weeklyCardBgOpacity.value = bgOp;
+    if (weeklyCardBgOpacityVal) weeklyCardBgOpacityVal.textContent = `${Math.round(bgOp * 100)}%`;
+  }
+
+  window.syncCardCustomizerUI = syncCardCustomizerUI;
+
+  if (weeklyCardTargetSelect) {
+    weeklyCardTargetSelect.addEventListener('change', () => {
+      if (state.weeklyData) {
+        state.weeklyData.selectedCardKey = weeklyCardTargetSelect.value !== 'allCards' ? weeklyCardTargetSelect.value : null;
+        if (state.weeklyData.selectedCardKey) {
+          state.weeklyData.selectedTextKey = null;
+        }
+      }
+      syncCardCustomizerUI();
+      triggerRender();
+    });
+  }
+
+  if (weeklyCardShowBorder) {
+    weeklyCardShowBorder.addEventListener('change', (e) => {
+      const targetKey = getActiveCardKey();
+      const cs = getCardStyle(targetKey, true);
+      cs.showBorder = e.target.checked;
+      pushWeeklyUndoSnapshot();
+      triggerRender();
+      autoSaveWeeklyDraft();
+    });
+  }
+
+  if (weeklyCardBorderWidth) {
+    weeklyCardBorderWidth.addEventListener('input', (e) => {
+      const targetKey = getActiveCardKey();
+      const cs = getCardStyle(targetKey, true);
+      const val = parseFloat(e.target.value);
+      cs.borderWidth = val;
+      if (weeklyCardBorderWidthNum) weeklyCardBorderWidthNum.value = val;
+      if (weeklyCardBorderWidthVal) weeklyCardBorderWidthVal.textContent = `${val}px`;
+      triggerRender();
+    });
+    weeklyCardBorderWidth.addEventListener('change', () => {
+      pushWeeklyUndoSnapshot();
+      autoSaveWeeklyDraft();
+    });
+  }
+
+  if (weeklyCardBorderWidthNum) {
+    weeklyCardBorderWidthNum.addEventListener('input', (e) => {
+      const targetKey = getActiveCardKey();
+      const cs = getCardStyle(targetKey, true);
+      const val = parseFloat(e.target.value) || 0;
+      cs.borderWidth = val;
+      if (weeklyCardBorderWidth) weeklyCardBorderWidth.value = val;
+      if (weeklyCardBorderWidthVal) weeklyCardBorderWidthVal.textContent = `${val}px`;
+      triggerRender();
+    });
+    weeklyCardBorderWidthNum.addEventListener('change', () => {
+      pushWeeklyUndoSnapshot();
+      autoSaveWeeklyDraft();
+    });
+  }
+
+  if (weeklyCardBorderColorPicker) {
+    weeklyCardBorderColorPicker.addEventListener('input', (e) => {
+      const targetKey = getActiveCardKey();
+      const cs = getCardStyle(targetKey, true);
+      cs.borderColor = e.target.value;
+      if (weeklyCardBorderColorHex) weeklyCardBorderColorHex.value = e.target.value;
+      triggerRender();
+    });
+    weeklyCardBorderColorPicker.addEventListener('change', () => {
+      pushWeeklyUndoSnapshot();
+      autoSaveWeeklyDraft();
+    });
+  }
+
+  if (weeklyCardBorderColorHex) {
+    weeklyCardBorderColorHex.addEventListener('input', (e) => {
+      const val = e.target.value.trim();
+      if (/^#[0-9A-Fa-f]{6}$/.test(val) || /^#[0-9A-Fa-f]{8}$/.test(val) || /^rgba?\(/.test(val)) {
+        const targetKey = getActiveCardKey();
+        const cs = getCardStyle(targetKey, true);
+        cs.borderColor = val;
+        if (weeklyCardBorderColorPicker && val.startsWith('#') && val.length === 7) {
+          weeklyCardBorderColorPicker.value = val;
+        }
+        triggerRender();
+      }
+    });
+    weeklyCardBorderColorHex.addEventListener('change', () => {
+      pushWeeklyUndoSnapshot();
+      autoSaveWeeklyDraft();
+    });
+  }
+
+  if (cardColorChips) {
+    cardColorChips.forEach((chip) => {
+      chip.addEventListener('click', () => {
+        const col = chip.getAttribute('data-color');
+        const targetKey = getActiveCardKey();
+        const cs = getCardStyle(targetKey, true);
+        if (col) {
+          cs.borderColor = col;
+          if (weeklyCardBorderColorPicker) weeklyCardBorderColorPicker.value = col;
+          if (weeklyCardBorderColorHex) weeklyCardBorderColorHex.value = col;
+        } else {
+          delete cs.borderColor;
+          if (weeklyCardBorderColorHex) weeklyCardBorderColorHex.value = '';
+        }
+        pushWeeklyUndoSnapshot();
+        triggerRender();
+        autoSaveWeeklyDraft();
+      });
+    });
+  }
+
+  if (weeklyCardRadius) {
+    weeklyCardRadius.addEventListener('input', (e) => {
+      const targetKey = getActiveCardKey();
+      const cs = getCardStyle(targetKey, true);
+      const val = parseInt(e.target.value, 10);
+      cs.radius = val;
+      if (weeklyCardRadiusVal) weeklyCardRadiusVal.textContent = `${val}px`;
+      triggerRender();
+    });
+    weeklyCardRadius.addEventListener('change', () => {
+      pushWeeklyUndoSnapshot();
+      autoSaveWeeklyDraft();
+    });
+  }  if (weeklyCardOffsetX) {
+    weeklyCardOffsetX.addEventListener('input', (e) => {
+      const targetKey = getActiveCardKey();
+      const cs = getCardStyle(targetKey, true);
+      const val = parseInt(e.target.value, 10);
+      const prevOX = typeof cs.offsetX === 'number' ? cs.offsetX : 0;
+      const dX = val - prevOX;
+      const { cardKeys } = getWeeklySelectedItems();
+      if (cardKeys && cardKeys.length > 1) {
+        cardKeys.forEach(k => {
+          const cStyle = getCardStyle(k, true);
+          cStyle.offsetX = (typeof cStyle.offsetX === 'number' ? cStyle.offsetX : 0) + dX;
+        });
+      } else {
+        cs.offsetX = val;
+      }
+      if (weeklyCardOffsetXNum) weeklyCardOffsetXNum.value = val;
+      if (weeklyCardOffsetXVal) weeklyCardOffsetXVal.textContent = `${val}px`;
+      triggerRender();
+    });
+    weeklyCardOffsetX.addEventListener('change', () => {
+      pushWeeklyUndoSnapshot();
+      autoSaveWeeklyDraft();
+    });
+  }
+
+  if (weeklyCardOffsetXNum) {
+    weeklyCardOffsetXNum.addEventListener('input', (e) => {
+      const targetKey = getActiveCardKey();
+      const cs = getCardStyle(targetKey, true);
+      const val = parseInt(e.target.value, 10) || 0;
+      const prevOX = typeof cs.offsetX === 'number' ? cs.offsetX : 0;
+      const dX = val - prevOX;
+      const { cardKeys } = getWeeklySelectedItems();
+      if (cardKeys && cardKeys.length > 1) {
+        cardKeys.forEach(k => {
+          const cStyle = getCardStyle(k, true);
+          cStyle.offsetX = (typeof cStyle.offsetX === 'number' ? cStyle.offsetX : 0) + dX;
+        });
+      } else {
+        cs.offsetX = val;
+      }
+      if (weeklyCardOffsetX) weeklyCardOffsetX.value = val;
+      if (weeklyCardOffsetXVal) weeklyCardOffsetXVal.textContent = `${val}px`;
+      triggerRender();
+    });
+    weeklyCardOffsetXNum.addEventListener('change', () => {
+      pushWeeklyUndoSnapshot();
+      autoSaveWeeklyDraft();
+    });
+  }  if (weeklyCardOffsetY) {
+    weeklyCardOffsetY.addEventListener('input', (e) => {
+      const targetKey = getActiveCardKey();
+      const cs = getCardStyle(targetKey, true);
+      const val = parseInt(e.target.value, 10);
+      const prevOY = typeof cs.offsetY === 'number' ? cs.offsetY : 0;
+      const dY = val - prevOY;
+      const { cardKeys } = getWeeklySelectedItems();
+      if (cardKeys && cardKeys.length > 1) {
+        cardKeys.forEach(k => {
+          const cStyle = getCardStyle(k, true);
+          cStyle.offsetY = (typeof cStyle.offsetY === 'number' ? cStyle.offsetY : 0) + dY;
+        });
+      } else {
+        cs.offsetY = val;
+      }
+      if (weeklyCardOffsetYNum) weeklyCardOffsetYNum.value = val;
+      if (weeklyCardOffsetYVal) weeklyCardOffsetYVal.textContent = `${val}px`;
+      triggerRender();
+    });
+    weeklyCardOffsetY.addEventListener('change', () => {
+      pushWeeklyUndoSnapshot();
+      autoSaveWeeklyDraft();
+    });
+  }
+
+  if (weeklyCardOffsetYNum) {
+    weeklyCardOffsetYNum.addEventListener('input', (e) => {
+      const targetKey = getActiveCardKey();
+      const cs = getCardStyle(targetKey, true);
+      const val = parseInt(e.target.value, 10) || 0;
+      const prevOY = typeof cs.offsetY === 'number' ? cs.offsetY : 0;
+      const dY = val - prevOY;
+      const { cardKeys } = getWeeklySelectedItems();
+      if (cardKeys && cardKeys.length > 1) {
+        cardKeys.forEach(k => {
+          const cStyle = getCardStyle(k, true);
+          cStyle.offsetY = (typeof cStyle.offsetY === 'number' ? cStyle.offsetY : 0) + dY;
+        });
+      } else {
+        cs.offsetY = val;
+      }
+      if (weeklyCardOffsetY) weeklyCardOffsetY.value = val;
+      if (weeklyCardOffsetYVal) weeklyCardOffsetYVal.textContent = `${val}px`;
+      triggerRender();
+    });
+    weeklyCardOffsetYNum.addEventListener('change', () => {
+      pushWeeklyUndoSnapshot();
+      autoSaveWeeklyDraft();
+    });
+  }
+
+  if (weeklyCardShowBg) {
+    weeklyCardShowBg.addEventListener('change', (e) => {
+      const targetKey = getActiveCardKey();
+      const cs = getCardStyle(targetKey, true);
+      cs.showBg = e.target.checked;
+      pushWeeklyUndoSnapshot();
+      triggerRender();
+      autoSaveWeeklyDraft();
+    });
+  }
+
+  if (weeklyCardBgColorPicker) {
+    weeklyCardBgColorPicker.addEventListener('input', (e) => {
+      const targetKey = getActiveCardKey();
+      const cs = getCardStyle(targetKey, true);
+      cs.fillColor = e.target.value;
+      triggerRender();
+    });
+    weeklyCardBgColorPicker.addEventListener('change', () => {
+      pushWeeklyUndoSnapshot();
+      autoSaveWeeklyDraft();
+    });
+  }
+
+  if (weeklyCardBgOpacity) {
+    weeklyCardBgOpacity.addEventListener('input', (e) => {
+      const targetKey = getActiveCardKey();
+      const cs = getCardStyle(targetKey, true);
+      const val = parseFloat(e.target.value);
+      cs.bgOpacity = val;
+      if (weeklyCardBgOpacityVal) weeklyCardBgOpacityVal.textContent = `${Math.round(val * 100)}%`;
+      triggerRender();
+    });
+    weeklyCardBgOpacity.addEventListener('change', () => {
+      pushWeeklyUndoSnapshot();
+      autoSaveWeeklyDraft();
+    });
+  }
+
+  if (weeklyCardWidthDelta) {
+    weeklyCardWidthDelta.addEventListener('input', (e) => {
+      const targetKey = getActiveCardKey();
+      const cs = getCardStyle(targetKey, true);
+      const val = parseInt(e.target.value, 10) || 0;
+      cs.widthDelta = val;
+      if (weeklyCardWidthDeltaNum) weeklyCardWidthDeltaNum.value = val;
+      if (weeklyCardWidthDeltaVal) weeklyCardWidthDeltaVal.textContent = `${val >= 0 ? '+' : ''}${val}px`;
+      triggerRender();
+    });
+    weeklyCardWidthDelta.addEventListener('change', () => {
+      pushWeeklyUndoSnapshot();
+      autoSaveWeeklyDraft();
+    });
+  }
+
+  if (weeklyCardWidthDeltaNum) {
+    weeklyCardWidthDeltaNum.addEventListener('input', (e) => {
+      const targetKey = getActiveCardKey();
+      const cs = getCardStyle(targetKey, true);
+      const val = parseInt(e.target.value, 10) || 0;
+      cs.widthDelta = val;
+      if (weeklyCardWidthDelta) weeklyCardWidthDelta.value = val;
+      if (weeklyCardWidthDeltaVal) weeklyCardWidthDeltaVal.textContent = `${val >= 0 ? '+' : ''}${val}px`;
+      triggerRender();
+    });
+    weeklyCardWidthDeltaNum.addEventListener('change', () => {
+      pushWeeklyUndoSnapshot();
+      autoSaveWeeklyDraft();
+    });
+  }
+
+  if (weeklyCardHeightDelta) {
+    weeklyCardHeightDelta.addEventListener('input', (e) => {
+      const targetKey = getActiveCardKey();
+      const cs = getCardStyle(targetKey, true);
+      const val = parseInt(e.target.value, 10) || 0;
+      cs.heightDelta = val;
+      if (weeklyCardHeightDeltaNum) weeklyCardHeightDeltaNum.value = val;
+      if (weeklyCardHeightDeltaVal) weeklyCardHeightDeltaVal.textContent = `${val >= 0 ? '+' : ''}${val}px`;
+      triggerRender();
+    });
+    weeklyCardHeightDelta.addEventListener('change', () => {
+      pushWeeklyUndoSnapshot();
+      autoSaveWeeklyDraft();
+    });
+  }
+
+  if (weeklyCardHeightDeltaNum) {
+    weeklyCardHeightDeltaNum.addEventListener('input', (e) => {
+      const targetKey = getActiveCardKey();
+      const cs = getCardStyle(targetKey, true);
+      const val = parseInt(e.target.value, 10) || 0;
+      cs.heightDelta = val;
+      if (weeklyCardHeightDelta) weeklyCardHeightDelta.value = val;
+      if (weeklyCardHeightDeltaVal) weeklyCardHeightDeltaVal.textContent = `${val >= 0 ? '+' : ''}${val}px`;
+      triggerRender();
+    });
+    weeklyCardHeightDeltaNum.addEventListener('change', () => {
+      pushWeeklyUndoSnapshot();
+      autoSaveWeeklyDraft();
+    });
+  }
+
+  if (weeklyResetCardSizeBtn) {
+    weeklyResetCardSizeBtn.addEventListener('click', () => {
+      const targetKey = getActiveCardKey();
+      const cs = getCardStyle(targetKey, true);
+      pushWeeklyUndoSnapshot();
+      delete cs.widthDelta;
+      delete cs.heightDelta;
+      delete cs.width;
+      delete cs.height;
+      syncCardCustomizerUI();
+      triggerRender();
+      autoSaveWeeklyDraft();
+      showToast(`Reset size for ${targetKey}`);
+    });
+  }
+
+  if (weeklyResetCurrentCardBtn) {
+    weeklyResetCurrentCardBtn.addEventListener('click', () => {
+      const targetKey = getActiveCardKey();
+      if (state.weeklyData && state.weeklyData.cardStyles) {
+        pushWeeklyUndoSnapshot();
+        delete state.weeklyData.cardStyles[targetKey];
+        syncCardCustomizerUI();
+        triggerRender();
+        autoSaveWeeklyDraft();
+        showToast(`Reset ${targetKey} card styles.`);
+      }
+    });
+  }
+
+  if (weeklyResetAllCardsBtn) {
+    weeklyResetAllCardsBtn.addEventListener('click', () => {
+      if (state.weeklyData) {
+        pushWeeklyUndoSnapshot();
+        state.weeklyData.cardStyles = {};
+        syncCardCustomizerUI();
+        triggerRender();
+        autoSaveWeeklyDraft();
+        showToast('Reset all weekly card styles.');
+      }
+    });
+  }
+
+  function selectWeeklyCard(cardKey) {
+    if (!state.weeklyData) return;
+    state.weeklyData.selectedCardKey = cardKey || null;
+    if (cardKey) {
+      state.weeklyData.selectedTextKey = null; // deselect text so card gizmo displays
+    }
+
+    if (cardKey && weeklyCardTargetSelect) {
+      let optionExists = false;
+      for (let i = 0; i < weeklyCardTargetSelect.options.length; i++) {
+        if (weeklyCardTargetSelect.options[i].value === cardKey) {
+          weeklyCardTargetSelect.selectedIndex = i;
+          weeklyCardTargetSelect.value = cardKey;
+          optionExists = true;
+          break;
+        }
+      }
+
+      if (!optionExists) {
+        let dynGroup = document.getElementById('weeklyCardSelectedOptgroup');
+        if (!dynGroup) {
+          dynGroup = document.createElement('optgroup');
+          dynGroup.id = 'weeklyCardSelectedOptgroup';
+          dynGroup.label = '🎯 Canvas Selected Cards';
+          weeklyCardTargetSelect.appendChild(dynGroup);
+        }
+        const opt = document.createElement('option');
+        opt.value = cardKey;
+        const b = renderer.weeklyCardBounds && renderer.weeklyCardBounds[cardKey];
+        const label = (b && b.label) ? b.label : cardKey;
+        opt.textContent = `🎯 ${label}`;
+        dynGroup.appendChild(opt);
+        weeklyCardTargetSelect.value = cardKey;
+      }
+      syncCardCustomizerUI();
+    }
+    triggerRender();
+  }
+  window.selectWeeklyCard = selectWeeklyCard;
+
+  function getWeeklyCardResizeHandles(selCard) {
+    if (!selCard || !selCard.w || !selCard.h) return [];
+    const padGizmo = 3;
+    const gx = selCard.x - padGizmo;
+    const gy = selCard.y - padGizmo;
+    const gw = selCard.w + padGizmo * 2;
+    const gh = selCard.h + padGizmo * 2;
+    return [
+      { name: 'nw', x: gx, y: gy, cursor: 'nwse-resize' },
+      { name: 'n',  x: gx + gw / 2, y: gy, cursor: 'ns-resize' },
+      { name: 'ne', x: gx + gw, y: gy, cursor: 'nesw-resize' },
+      { name: 'e',  x: gx + gw, y: gy + gh / 2, cursor: 'ew-resize' },
+      { name: 'se', x: gx + gw, y: gy + gh, cursor: 'nwse-resize' },
+      { name: 's',  x: gx + gw / 2, y: gy + gh, cursor: 'ns-resize' },
+      { name: 'sw', x: gx, y: gy + gh, cursor: 'nesw-resize' },
+      { name: 'w',  x: gx, y: gy + gh / 2, cursor: 'ew-resize' },
+    ];
+  }
+  window.getWeeklyCardResizeHandles = getWeeklyCardResizeHandles;
+
+  function startWeeklyCardResize(clientX, clientY, targetKey, handleName, scaleX, scaleY) {
+    if (!state.weeklyData || !targetKey) return;
+    pushWeeklyUndoSnapshot();
+    window.isResizingWeeklyCard = true;
+
+    const cs = getCardStyle(targetKey, true);
+    const selCard = renderer.weeklyCardBounds && renderer.weeklyCardBounds[targetKey];
+    const startX = clientX;
+    const startY = clientY;
+    const initW = selCard ? selCard.w : 300;
+    const initH = selCard ? selCard.h : 200;
+    const initWidthDelta = typeof cs.widthDelta === 'number' ? cs.widthDelta : (selCard && typeof selCard.widthDelta === 'number' ? selCard.widthDelta : 0);
+    const initHeightDelta = typeof cs.heightDelta === 'number' ? cs.heightDelta : (selCard && typeof selCard.heightDelta === 'number' ? selCard.heightDelta : 0);
+    const initOX = typeof cs.offsetX === 'number' ? cs.offsetX : 0;
+    const initOY = typeof cs.offsetY === 'number' ? cs.offsetY : 0;
+
+    const onPointerMove = (e) => {
+      const cX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : e.clientX;
+      const cY = e.touches && e.touches.length > 0 ? e.touches[0].clientY : e.clientY;
+      if (e.cancelable) e.preventDefault();
+
+      const deltaX = (cX - startX) * scaleX;
+      const deltaY = (cY - startY) * scaleY;
+
+      // Handle horizontal resizing
+      if (handleName.includes('e')) {
+        const newW = Math.max(60, initW + deltaX);
+        const dW = newW - initW;
+        const newWDelta = Math.round(initWidthDelta + dW);
+        cs.widthDelta = newWDelta;
+        if (weeklyCardWidthDelta) weeklyCardWidthDelta.value = newWDelta;
+        if (weeklyCardWidthDeltaNum) weeklyCardWidthDeltaNum.value = newWDelta;
+        if (weeklyCardWidthDeltaVal) weeklyCardWidthDeltaVal.textContent = `${newWDelta >= 0 ? '+' : ''}${newWDelta}px`;
+      } else if (handleName.includes('w')) {
+        const newW = Math.max(60, initW - deltaX);
+        const dW = newW - initW;
+        const newWDelta = Math.round(initWidthDelta + dW);
+        const newOX = Math.round(initOX - dW);
+        cs.widthDelta = newWDelta;
+        cs.offsetX = newOX;
+        if (weeklyCardWidthDelta) weeklyCardWidthDelta.value = newWDelta;
+        if (weeklyCardWidthDeltaNum) weeklyCardWidthDeltaNum.value = newWDelta;
+        if (weeklyCardWidthDeltaVal) weeklyCardWidthDeltaVal.textContent = `${newWDelta >= 0 ? '+' : ''}${newWDelta}px`;
+        if (weeklyCardOffsetX) weeklyCardOffsetX.value = newOX;
+        if (weeklyCardOffsetXNum) weeklyCardOffsetXNum.value = newOX;
+        if (weeklyCardOffsetXVal) weeklyCardOffsetXVal.textContent = `${newOX}px`;
+      }
+
+      // Handle vertical resizing
+      if (handleName.includes('s')) {
+        const newH = Math.max(40, initH + deltaY);
+        const dH = newH - initH;
+        const newHDelta = Math.round(initHeightDelta + dH);
+        cs.heightDelta = newHDelta;
+        if (weeklyCardHeightDelta) weeklyCardHeightDelta.value = newHDelta;
+        if (weeklyCardHeightDeltaNum) weeklyCardHeightDeltaNum.value = newHDelta;
+        if (weeklyCardHeightDeltaVal) weeklyCardHeightDeltaVal.textContent = `${newHDelta >= 0 ? '+' : ''}${newHDelta}px`;
+      } else if (handleName.includes('n')) {
+        const newH = Math.max(40, initH - deltaY);
+        const dH = newH - initH;
+        const newHDelta = Math.round(initHeightDelta + dH);
+        const newOY = Math.round(initOY - dH);
+        cs.heightDelta = newHDelta;
+        cs.offsetY = newOY;
+        if (weeklyCardHeightDelta) weeklyCardHeightDelta.value = newHDelta;
+        if (weeklyCardHeightDeltaNum) weeklyCardHeightDeltaNum.value = newHDelta;
+        if (weeklyCardHeightDeltaVal) weeklyCardHeightDeltaVal.textContent = `${newHDelta >= 0 ? '+' : ''}${newHDelta}px`;
+        if (weeklyCardOffsetY) weeklyCardOffsetY.value = newOY;
+        if (weeklyCardOffsetYNum) weeklyCardOffsetYNum.value = newOY;
+        if (weeklyCardOffsetYVal) weeklyCardOffsetYVal.textContent = `${newOY}px`;
+      }
+
+      triggerRender();
+    };
+
+    const onPointerUp = () => {
+      window.isResizingWeeklyCard = false;
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('mousemove', onPointerMove);
+      window.removeEventListener('touchmove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('mouseup', onPointerUp);
+      window.removeEventListener('touchend', onPointerUp);
+      window.removeEventListener('touchcancel', onPointerUp);
+      autoSaveWeeklyDraft();
+    };
+
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
+    window.addEventListener('mousemove', onPointerMove);
+    window.addEventListener('touchmove', onPointerMove, { passive: false });
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('mouseup', onPointerUp);
+    window.addEventListener('touchend', onPointerUp);
+    window.addEventListener('touchcancel', onPointerUp);
+  }
+  window.startWeeklyCardResize = startWeeklyCardResize;
+
+  function startWeeklyCardDrag(clientX, clientY, targetKey, scaleX, scaleY) {
+    if (!state.weeklyData || !targetKey) return;
+    pushWeeklyUndoSnapshot();
+    window.isDraggingWeeklyCard = true;
+
+    const cs = getCardStyle(targetKey, true);
+    const startX = clientX;
+    const startY = clientY;
+    const initOX = typeof cs.offsetX === 'number' ? cs.offsetX : 0;
+    const initOY = typeof cs.offsetY === 'number' ? cs.offsetY : 0;
+
+    const onPointerMove = (e) => {
+      const cX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : e.clientX;
+      const cY = e.touches && e.touches.length > 0 ? e.touches[0].clientY : e.clientY;
+      if (e.cancelable) e.preventDefault();
+
+      const deltaX = (cX - startX) * scaleX;
+      const deltaY = (cY - startY) * scaleY;
+      const newOX = Math.round(initOX + deltaX);
+      const newOY = Math.round(initOY + deltaY);
+
+      cs.offsetX = newOX;
+      cs.offsetY = newOY;
+
+      if (weeklyCardOffsetX) weeklyCardOffsetX.value = newOX;
+      if (weeklyCardOffsetXNum) weeklyCardOffsetXNum.value = newOX;
+      if (weeklyCardOffsetXVal) weeklyCardOffsetXVal.textContent = `${newOX}px`;
+      if (weeklyCardOffsetY) weeklyCardOffsetY.value = newOY;
+      if (weeklyCardOffsetYNum) weeklyCardOffsetYNum.value = newOY;
+      if (weeklyCardOffsetYVal) weeklyCardOffsetYVal.textContent = `${newOY}px`;
+
+      triggerRender();
+    };
+
+    const onPointerUp = () => {
+      window.isDraggingWeeklyCard = false;
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('mousemove', onPointerMove);
+      window.removeEventListener('touchmove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('mouseup', onPointerUp);
+      window.removeEventListener('touchend', onPointerUp);
+      window.removeEventListener('touchcancel', onPointerUp);
+      autoSaveWeeklyDraft();
+    };
+
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
+    window.addEventListener('mousemove', onPointerMove);
+    window.addEventListener('touchmove', onPointerMove, { passive: false });
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('mouseup', onPointerUp);
+    window.addEventListener('touchend', onPointerUp);
+    window.addEventListener('touchcancel', onPointerUp);
+  }
+  window.startWeeklyCardDrag = startWeeklyCardDrag;
+
+  function boxIntersects(a, b) {
+    return !(a.x + a.w < b.x || a.x > b.x + b.w || a.y + a.h < b.y || a.y > b.y + b.h);
+  }
+
+  function startWeeklyGroupDrag(clientX, clientY, textKeys, cardKeys, scaleX, scaleY) {
+    if (!state.weeklyData) return;
+    pushWeeklyUndoSnapshot();
+    window.isDraggingWeeklyGroup = true;
+
+    const startX = clientX;
+    const startY = clientY;
+
+    // Snapshot initial offsets
+    const textInits = {};
+    textKeys.forEach(k => {
+      const st = getTextStyle(k, true);
+      textInits[k] = {
+        ox: typeof st.offsetX === 'number' ? st.offsetX : 0,
+        oy: typeof st.offsetY === 'number' ? st.offsetY : 0
+      };
+    });
+
+    const cardInits = {};
+    cardKeys.forEach(k => {
+      const cs = getCardStyle(k, true);
+      cardInits[k] = {
+        ox: typeof cs.offsetX === 'number' ? cs.offsetX : 0,
+        oy: typeof cs.offsetY === 'number' ? cs.offsetY : 0
+      };
+    });
+
+    const onPointerMove = (e) => {
+      const cX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : e.clientX;
+      const cY = e.touches && e.touches.length > 0 ? e.touches[0].clientY : e.clientY;
+      if (e.cancelable) e.preventDefault();
+
+      const deltaX = (cX - startX) * scaleX;
+      const deltaY = (cY - startY) * scaleY;
+
+      textKeys.forEach(k => {
+        const st = getTextStyle(k, true);
+        st.offsetX = Math.round(textInits[k].ox + deltaX);
+        st.offsetY = Math.round(textInits[k].oy + deltaY);
+      });
+
+      cardKeys.forEach(k => {
+        const cs = getCardStyle(k, true);
+        cs.offsetX = Math.round(cardInits[k].ox + deltaX);
+        cs.offsetY = Math.round(cardInits[k].oy + deltaY);
+      });
+
+      // Sync active item UI if 1 is active
+      if (textKeys.length === 1 && textOffsetX) {
+        const st = getTextStyle(textKeys[0], false);
+        textOffsetX.value = st.offsetX || 0;
+        if (textOffsetXVal) textOffsetXVal.textContent = `${st.offsetX || 0}px`;
+        if (textOffsetY) textOffsetY.value = st.offsetY || 0;
+        if (textOffsetYVal) textOffsetYVal.textContent = `${st.offsetY || 0}px`;
+      }
+
+      triggerRender();
+    };
+
+    const onPointerUp = () => {
+      window.isDraggingWeeklyGroup = false;
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('mousemove', onPointerMove);
+      window.removeEventListener('touchmove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('mouseup', onPointerUp);
+      window.removeEventListener('touchend', onPointerUp);
+      window.removeEventListener('touchcancel', onPointerUp);
+      autoSaveWeeklyDraft();
+    };
+
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
+    window.addEventListener('mousemove', onPointerMove);
+    window.addEventListener('touchmove', onPointerMove, { passive: false });
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('mouseup', onPointerUp);
+    window.addEventListener('touchend', onPointerUp);
+    window.addEventListener('touchcancel', onPointerUp);
+  }
+  window.startWeeklyGroupDrag = startWeeklyGroupDrag;
+
+  function startWeeklyMarquee(clientX, clientY, scaleX, scaleY) {
+    if (!state.weeklyData) return;
+    const canvas = document.getElementById('overlayCanvas');
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const startCanvasX = (clientX - rect.left) * scaleX;
+    const startCanvasY = (clientY - rect.top) * scaleY;
+
+    let moved = false;
+
+    const onPointerMove = (e) => {
+      const cX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : e.clientX;
+      const cY = e.touches && e.touches.length > 0 ? e.touches[0].clientY : e.clientY;
+      if (e.cancelable) e.preventDefault();
+
+      const currCanvasX = (cX - rect.left) * scaleX;
+      const currCanvasY = (cY - rect.top) * scaleY;
+
+      const mx = Math.min(startCanvasX, currCanvasX);
+      const my = Math.min(startCanvasY, currCanvasY);
+      const mw = Math.abs(currCanvasX - startCanvasX);
+      const mh = Math.abs(currCanvasY - startCanvasY);
+
+      if (mw > 6 || mh > 6) {
+        moved = true;
+        renderer.weeklyMarqueeBox = { x: mx, y: my, w: mw, h: mh };
+        triggerRender();
+      }
+    };
+
+    const onPointerUp = () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('mousemove', onPointerMove);
+      window.removeEventListener('touchmove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('mouseup', onPointerUp);
+      window.removeEventListener('touchend', onPointerUp);
+      window.removeEventListener('touchcancel', onPointerUp);
+
+      if (moved && renderer.weeklyMarqueeBox) {
+        const mb = renderer.weeklyMarqueeBox;
+        renderer.weeklyMarqueeBox = null;
+
+        // Find intersecting text elements
+        const selectedTexts = [];
+        const tBounds = renderer.weeklyTextBounds || {};
+        for (const [key, b] of Object.entries(tBounds)) {
+          if (boxIntersects(mb, b)) {
+            selectedTexts.push(key);
+          }
+        }
+
+        // Find intersecting cards
+        const selectedCards = [];
+        const cBounds = renderer.weeklyCardBounds || {};
+        for (const [key, cb] of Object.entries(cBounds)) {
+          if (boxIntersects(mb, cb)) {
+            selectedCards.push(key);
+          }
+        }
+
+        if (selectedTexts.length > 0 || selectedCards.length > 0) {
+          selectWeeklyItemsBulk({ textKeys: selectedTexts, cardKeys: selectedCards });
+          showToast(`Selected ${selectedTexts.length + selectedCards.length} items with marquee box`);
+        } else {
+          clearWeeklySelection();
+        }
+      } else {
+        renderer.weeklyMarqueeBox = null;
+        clearWeeklySelection();
+      }
+
+      triggerRender();
+    };
+
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
+    window.addEventListener('mousemove', onPointerMove);
+    window.addEventListener('touchmove', onPointerMove, { passive: false });
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('mouseup', onPointerUp);
+    window.addEventListener('touchend', onPointerUp);
+    window.addEventListener('touchcancel', onPointerUp);
+  }
+  window.startWeeklyMarquee = startWeeklyMarquee;
+
+// ==========================================
 
   // SAVE & LOAD TEMPLATE PRESETS
 
@@ -4528,6 +5711,7 @@ function setupWeeklyControls() {
       },
 
       textStyles: JSON.parse(JSON.stringify(state.weeklyData.textStyles || {})),
+      cardStyles: JSON.parse(JSON.stringify(state.weeklyData.cardStyles || {})),
 
       runRenames: (state.weeklyData.runs || []).map((r, i) => ({
 
@@ -4616,6 +5800,13 @@ function setupWeeklyControls() {
       state.weeklyData.textStyles = JSON.parse(JSON.stringify(preset.textStyles));
 
     }
+
+    if (preset.cardStyles) {
+      state.weeklyData.cardStyles = JSON.parse(JSON.stringify(preset.cardStyles));
+    } else {
+      state.weeklyData.cardStyles = {};
+    }
+    if (typeof syncCardCustomizerUI === 'function') syncCardCustomizerUI();
 
 
 
@@ -5029,50 +6220,45 @@ function setupWeeklyControls() {
 
 
     const onPointerMove = (e) => {
+      const cX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : e.clientX;
+      const cY = e.touches && e.touches.length > 0 ? e.touches[0].clientY : e.clientY;
+      if (e.cancelable) e.preventDefault();
 
-      const deltaX = (e.clientX - startX) * scaleX;
-
-      const deltaY = (e.clientY - startY) * scaleY;
-
+      const deltaX = (cX - startX) * scaleX;
+      const deltaY = (cY - startY) * scaleY;
       const newOX = Math.round(initOX + deltaX);
-
       const newOY = Math.round(initOY + deltaY);
 
-
-
       st.offsetX = newOX;
-
       st.offsetY = newOY;
 
-
-
       if (textOffsetX) textOffsetX.value = newOX;
-
       if (textOffsetXVal) textOffsetXVal.textContent = `${newOX}px`;
-
       if (textOffsetY) textOffsetY.value = newOY;
-
       if (textOffsetYVal) textOffsetYVal.textContent = `${newOY}px`;
 
-
-
       triggerRender();
-
     };
-
-
 
     const onPointerUp = () => {
-
       window.isDraggingWeeklyText = false;
-
       window.removeEventListener('pointermove', onPointerMove);
-
+      window.removeEventListener('mousemove', onPointerMove);
+      window.removeEventListener('touchmove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
-
+      window.removeEventListener('mouseup', onPointerUp);
+      window.removeEventListener('touchend', onPointerUp);
+      window.removeEventListener('touchcancel', onPointerUp);
       autoSaveWeeklyDraft();
-
     };
+
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
+    window.addEventListener('mousemove', onPointerMove);
+    window.addEventListener('touchmove', onPointerMove, { passive: false });
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('mouseup', onPointerUp);
+    window.addEventListener('touchend', onPointerUp);
+    window.addEventListener('touchcancel', onPointerUp);
 
 
 
@@ -14835,71 +16021,110 @@ function setupGizmoController() {
   const handlePointerDown = (clientX, clientY) => {
 
     // 1. Weekly Mode on-canvas text selection and dragging
-
     if (state.isWeeklyMode) {
-
       const rect = canvas.getBoundingClientRect();
-
       const scaleX = canvas.width / rect.width;
-
       const scaleY = canvas.height / rect.height;
-
       const clickX = (clientX - rect.left) * scaleX;
-
       const clickY = (clientY - rect.top) * scaleY;
 
+      const { textKeys: curTextKeys, cardKeys: curCardKeys } = getWeeklySelectedItems();
 
-
-      let foundKey = null;
-
-      let minDistance = Infinity;
-
-      const bounds = renderer.weeklyTextBounds || {};
-
-      // Test bounding boxes with 10px margin, selecting closest center
-
-      for (const [key, b] of Object.entries(bounds).reverse()) {
-
-        const margin = 10;
-
-        if (clickX >= b.x - margin && clickX <= b.x + b.w + margin &&
-
-            clickY >= b.y - margin && clickY <= b.y + b.h + margin) {
-
-          const centerX = b.x + b.w / 2;
-
-          const centerY = b.y + b.h / 2;
-
-          const dist = Math.hypot(clickX - centerX, clickY - centerY);
-
-          if (dist < minDistance) {
-
-            minDistance = dist;
-
-            foundKey = key;
-
+      // 1. Check if clicking/tapping resize handles of currently selected card (if only 1 card selected)
+      if (curCardKeys.length === 1 && curTextKeys.length === 0 && renderer && renderer.weeklyCardBounds) {
+        const selCard = renderer.weeklyCardBounds[curCardKeys[0]];
+        if (selCard && typeof getWeeklyCardResizeHandles === 'function') {
+          const handles = getWeeklyCardResizeHandles(selCard);
+          const hitRadius = (window._weeklyIsTouchInteraction ? 26 : 14);
+          for (const h of handles) {
+            const dist = Math.hypot(clickX - h.x, clickY - h.y);
+            if (dist <= hitRadius) {
+              startWeeklyCardResize(clientX, clientY, curCardKeys[0], h.name, scaleX, scaleY);
+              return;
+            }
           }
+        }
+      }
 
+      // 2. Check text bounds
+      let foundKey = null;
+      let minDistance = Infinity;
+      const bounds = renderer.weeklyTextBounds || {};
+      for (const [key, b] of Object.entries(bounds).reverse()) {
+        const margin = 10;
+        if (clickX >= b.x - margin && clickX <= b.x + b.w + margin &&
+            clickY >= b.y - margin && clickY <= b.y + b.h + margin) {
+          const centerX = b.x + b.w / 2;
+          const centerY = b.y + b.h / 2;
+          const dist = Math.hypot(clickX - centerX, clickY - centerY);
+          if (dist < minDistance) {
+            minDistance = dist;
+            foundKey = key;
+          }
+        }
+      }
+
+      // 3. Check card bounds
+      let foundCardKey = null;
+      let minCardDist = Infinity;
+      const cardBounds = renderer.weeklyCardBounds || {};
+      for (const [cardKey, cb] of Object.entries(cardBounds).reverse()) {
+        const margin = 8;
+        if (clickX >= cb.x - margin && clickX <= cb.x + cb.w + margin &&
+            clickY >= cb.y - margin && clickY <= cb.y + cb.h + margin) {
+          const centerX = cb.x + cb.w / 2;
+          const centerY = cb.y + cb.h / 2;
+          const dist = Math.hypot(clickX - centerX, clickY - centerY);
+          if (dist < minCardDist) {
+            minCardDist = dist;
+            foundCardKey = cardKey;
+          }
+        }
+      }
+
+      const isMultiTrigger = window.weeklyMultiSelectMode || window._weeklyShiftKeyActive;
+
+      // Handle hit text element
+      if (foundKey) {
+        if (isMultiTrigger) {
+          toggleWeeklyItemSelection('text', foundKey);
+          return;
         }
 
+        // If clicked element is ALREADY part of a multi-selection group, start group drag!
+        if (curTextKeys.includes(foundKey) && (curTextKeys.length + curCardKeys.length > 1)) {
+          startWeeklyGroupDrag(clientX, clientY, curTextKeys, curCardKeys, scaleX, scaleY);
+          return;
+        }
+
+        // Single text selection
+        selectWeeklyItemsBulk({ textKeys: [foundKey], cardKeys: [] });
+        startWeeklyTextDrag(clientX, clientY, foundKey, scaleX, scaleY);
+        return;
       }
 
+      // Handle hit card element
+      if (foundCardKey) {
+        if (isMultiTrigger) {
+          toggleWeeklyItemSelection('card', foundCardKey);
+          return;
+        }
 
+        // If clicked card is ALREADY part of a multi-selection group, start group drag!
+        if (curCardKeys.includes(foundCardKey) && (curTextKeys.length + curCardKeys.length > 1)) {
+          startWeeklyGroupDrag(clientX, clientY, curTextKeys, curCardKeys, scaleX, scaleY);
+          return;
+        }
 
-      if (window.selectWeeklyText) {
-
-        window.selectWeeklyText(foundKey);
-
+        // Single card selection
+        selectWeeklyItemsBulk({ textKeys: [], cardKeys: [foundCardKey] });
+        startWeeklyCardDrag(clientX, clientY, foundCardKey, scaleX, scaleY);
+        return;
       }
 
-      if (foundKey && window.startWeeklyTextDrag) {
-
-        window.startWeeklyTextDrag(clientX, clientY, foundKey, scaleX, scaleY);
-
-      }
-
+      // 4. Hit empty canvas: start Marquee selection box
+      startWeeklyMarquee(clientX, clientY, scaleX, scaleY);
       return;
-
     }
 
 
@@ -14973,70 +16198,112 @@ function setupGizmoController() {
   canvas.addEventListener('mousemove', (e) => {
 
     if (state.isWeeklyMode) {
-
-      if (window.isDraggingWeeklyText) return;
-
+      if (window.isDraggingWeeklyText || window.isDraggingWeeklyCard || window.isResizingWeeklyCard || window.isDraggingWeeklyGroup || renderer.weeklyMarqueeBox) return;
       const rect = canvas.getBoundingClientRect();
-
       const scaleX = canvas.width / rect.width;
-
       const scaleY = canvas.height / rect.height;
-
       const mouseX = (e.clientX - rect.left) * scaleX;
-
       const mouseY = (e.clientY - rect.top) * scaleY;
 
-      let isHover = false;
-
-      const bounds = renderer.weeklyTextBounds || {};
-
-      for (const [key, b] of Object.entries(bounds)) {
-
-        const margin = 6;
-
-        if (mouseX >= b.x - margin && mouseX <= b.x + b.w + margin &&
-
-            mouseY >= b.y - margin && mouseY <= b.y + b.h + margin) {
-
-          isHover = true;
-
-          break;
-
+      // Check if hovering over active card resize handles first
+      if (state.weeklyData && state.weeklyData.selectedCardKey && renderer && renderer.weeklyCardBounds) {
+        const selCard = renderer.weeklyCardBounds[state.weeklyData.selectedCardKey];
+        if (selCard && typeof getWeeklyCardResizeHandles === 'function') {
+          const handles = getWeeklyCardResizeHandles(selCard);
+          for (const h of handles) {
+            if (Math.hypot(mouseX - h.x, mouseY - h.y) <= 12) {
+              canvas.style.cursor = h.cursor;
+              return;
+            }
+          }
         }
-
       }
 
+      let isHover = false;
+      const tBounds = renderer.weeklyTextBounds || {};
+      for (const [key, b] of Object.entries(tBounds)) {
+        const margin = 6;
+        if (mouseX >= b.x - margin && mouseX <= b.x + b.w + margin &&
+            mouseY >= b.y - margin && mouseY <= b.y + b.h + margin) {
+          isHover = true;
+          break;
+        }
+      }
+      if (!isHover) {
+        const cBounds = renderer.weeklyCardBounds || {};
+        for (const [key, cb] of Object.entries(cBounds)) {
+          const margin = 6;
+          if (mouseX >= cb.x - margin && mouseX <= cb.x + cb.w + margin &&
+              mouseY >= cb.y - margin && mouseY <= cb.y + cb.h + margin) {
+            isHover = true;
+            break;
+          }
+        }
+      }
       canvas.style.cursor = isHover ? 'move' : 'default';
-
     }
 
-  });
-
-
-
-  canvas.addEventListener('mousedown', (e) => {
-
+  });  canvas.addEventListener('mousedown', (e) => {
+    window._weeklyShiftKeyActive = !!(e.shiftKey || e.ctrlKey || e.metaKey);
     if (e.button === 0) handlePointerDown(e.clientX, e.clientY);
-
   });
 
 
 
   canvas.addEventListener('touchstart', (e) => {
-
     if (e.touches.length === 1) {
-
       const t = e.touches[0];
+      if (state.isWeeklyMode) {
+        window._weeklyIsTouchInteraction = true;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const touchX = (t.clientX - rect.left) * scaleX;
+        const touchY = (t.clientY - rect.top) * scaleY;
 
-      handlePointerDown(t.clientX, t.clientY);
-
+        let shouldIntercept = false;
+        if (state.weeklyData && state.weeklyData.selectedCardKey && renderer && renderer.weeklyCardBounds) {
+          const selCard = renderer.weeklyCardBounds[state.weeklyData.selectedCardKey];
+          if (selCard && typeof getWeeklyCardResizeHandles === 'function') {
+            const handles = getWeeklyCardResizeHandles(selCard);
+            for (const h of handles) {
+              if (Math.hypot(touchX - h.x, touchY - h.y) <= 28) {
+                shouldIntercept = true;
+                break;
+              }
+            }
+          }
+        }
+        if (!shouldIntercept) {
+          const tBounds = renderer.weeklyTextBounds || {};
+          for (const b of Object.values(tBounds)) {
+            if (touchX >= b.x - 10 && touchX <= b.x + b.w + 10 && touchY >= b.y - 10 && touchY <= b.y + b.h + 10) {
+              shouldIntercept = true;
+              break;
+            }
+          }
+        }
+        if (!shouldIntercept) {
+          const cBounds = renderer.weeklyCardBounds || {};
+          for (const cb of Object.values(cBounds)) {
+            if (touchX >= cb.x - 10 && touchX <= cb.x + cb.w + 10 && touchY >= cb.y - 10 && touchY <= cb.y + cb.h + 10) {
+              shouldIntercept = true;
+              break;
+            }
+          }
+        }
+        if (shouldIntercept && e.cancelable) {
+          e.preventDefault();
+        }
+        handlePointerDown(t.clientX, t.clientY);
+        setTimeout(() => { window._weeklyIsTouchInteraction = false; }, 400);
+      } else {
+        handlePointerDown(t.clientX, t.clientY);
+      }
     } else {
-
       isInteracting = false;
-
     }
-
-  }, { passive: true });
+  }, { passive: false });
 
 
 
