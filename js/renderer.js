@@ -5,6 +5,8 @@
  * and 6-7 distinct design variants for every widget.
  */
 
+import { renderWeeklyRecapLayout } from './weeklyRenderer.js';
+
 // Color themes with high-contrast accessibility presets
 export const THEMES = {
   volt: {
@@ -80,8 +82,13 @@ export class OverlayRenderer {
     this.bgImage = image;
   }
 
-  recordBounds(key, name, x, y, width, height) {
+  recordBounds(key, name, x, y, width, height, customRot = null) {
     if (!this.widgetBounds) this.widgetBounds = {};
+    const rot = (typeof customRot === 'number')
+      ? customRot
+      : ((typeof this.currentWidgetRotation === 'number' && this.currentWidgetRotation !== 0)
+          ? this.currentWidgetRotation
+          : this.getWidgetRotation(this.currentConfig, key));
     this.widgetBounds[key] = {
       id: key,
       name: name,
@@ -89,10 +96,234 @@ export class OverlayRenderer {
       y: Math.round(y),
       width: Math.round(width),
       height: Math.round(height),
+      rotation: rot,
     };
   }
 
+  getWidgetRotation(config, widgetKey) {
+    if (config && config.widgetPositions && config.widgetPositions[widgetKey]) {
+      const p = config.widgetPositions[widgetKey];
+      if (typeof p.rotation === 'number' && !isNaN(p.rotation)) return p.rotation;
+    }
+    if (config && config.elementStyles && config.elementStyles[widgetKey]) {
+      const st = config.elementStyles[widgetKey];
+      if (typeof st.rotation === 'number' && !isNaN(st.rotation)) return st.rotation;
+    }
+    return 0;
+  }
+
+  applyWidgetRotation(ctx, config, widgetKey, x, y, width, height) {
+    const rot = this.getWidgetRotation(config, widgetKey);
+    this.currentWidgetRotation = rot;
+    if (rot && rot !== 0) {
+      const cx = x + width / 2;
+      const cy = y + height / 2;
+      ctx.translate(cx, cy);
+      ctx.rotate((rot * Math.PI) / 180);
+      ctx.translate(-cx, -cy);
+    }
+    this.setupTextEffectsHook(ctx, config, widgetKey);
+    return rot;
+  }
+
+  getTextEffects(config, widgetKey, partKey = null) {
+    const elStyle = this.getElementStyle(config, widgetKey) || {};
+    let subPart = null;
+    if (partKey && config && config.widgetElementOffsets && config.widgetElementOffsets[widgetKey]) {
+      subPart = config.widgetElementOffsets[widgetKey][partKey];
+    }
+
+    // Shadow settings
+    let shadowEnabled = false;
+    let shadowColor = '#000000';
+    let shadowBlur = 8;
+    let shadowOffsetX = 0;
+    let shadowOffsetY = 3;
+
+    if (subPart && subPart.textShadow !== undefined) {
+      if (typeof subPart.textShadow === 'object') {
+        shadowEnabled = !!subPart.textShadow.enabled;
+        if (subPart.textShadow.color) shadowColor = subPart.textShadow.color;
+        if (typeof subPart.textShadow.blur === 'number') shadowBlur = subPart.textShadow.blur;
+        if (typeof subPart.textShadow.offsetX === 'number') shadowOffsetX = subPart.textShadow.offsetX;
+        if (typeof subPart.textShadow.offsetY === 'number') shadowOffsetY = subPart.textShadow.offsetY;
+      } else {
+        shadowEnabled = !!subPart.textShadow;
+      }
+      if (subPart.textShadowColor) shadowColor = subPart.textShadowColor;
+      if (typeof subPart.textShadowBlur === 'number') shadowBlur = subPart.textShadowBlur;
+      if (typeof subPart.textShadowOffsetX === 'number') shadowOffsetX = subPart.textShadowOffsetX;
+      if (typeof subPart.textShadowOffsetY === 'number') shadowOffsetY = subPart.textShadowOffsetY;
+    } else if (elStyle.textShadow !== undefined) {
+      if (typeof elStyle.textShadow === 'object') {
+        shadowEnabled = !!elStyle.textShadow.enabled;
+        if (elStyle.textShadow.color) shadowColor = elStyle.textShadow.color;
+        if (typeof elStyle.textShadow.blur === 'number') shadowBlur = elStyle.textShadow.blur;
+        if (typeof elStyle.textShadow.offsetX === 'number') shadowOffsetX = elStyle.textShadow.offsetX;
+        if (typeof elStyle.textShadow.offsetY === 'number') shadowOffsetY = elStyle.textShadow.offsetY;
+      } else {
+        shadowEnabled = !!elStyle.textShadow;
+      }
+      if (elStyle.textShadowColor) shadowColor = elStyle.textShadowColor;
+      if (typeof elStyle.textShadowBlur === 'number') shadowBlur = elStyle.textShadowBlur;
+      if (typeof elStyle.textShadowOffsetX === 'number') shadowOffsetX = elStyle.textShadowOffsetX;
+      if (typeof elStyle.textShadowOffsetY === 'number') shadowOffsetY = elStyle.textShadowOffsetY;
+    }
+
+    // Outline settings
+    let outlineEnabled = false;
+    let outlineColor = '#000000';
+    let outlineWidth = 2;
+
+    if (subPart && subPart.textOutline !== undefined) {
+      if (typeof subPart.textOutline === 'object') {
+        outlineEnabled = !!subPart.textOutline.enabled;
+        if (subPart.textOutline.color) outlineColor = subPart.textOutline.color;
+        if (typeof subPart.textOutline.width === 'number') outlineWidth = subPart.textOutline.width;
+      } else {
+        outlineEnabled = !!subPart.textOutline;
+      }
+      if (subPart.textOutlineColor) outlineColor = subPart.textOutlineColor;
+      if (typeof subPart.textOutlineWidth === 'number') outlineWidth = subPart.textOutlineWidth;
+    } else if (elStyle.textOutline !== undefined) {
+      if (typeof elStyle.textOutline === 'object') {
+        outlineEnabled = !!elStyle.textOutline.enabled;
+        if (elStyle.textOutline.color) outlineColor = elStyle.textOutline.color;
+        if (typeof elStyle.textOutline.width === 'number') outlineWidth = elStyle.textOutline.width;
+      } else {
+        outlineEnabled = !!elStyle.textOutline;
+      }
+      if (elStyle.textOutlineColor) outlineColor = elStyle.textOutlineColor;
+      if (typeof elStyle.textOutlineWidth === 'number') outlineWidth = elStyle.textOutlineWidth;
+    }
+
+    return {
+      shadowEnabled,
+      shadowColor,
+      shadowBlur,
+      shadowOffsetX,
+      shadowOffsetY,
+      outlineEnabled,
+      outlineColor,
+      outlineWidth,
+      shadow: {
+        enabled: shadowEnabled,
+        color: shadowColor,
+        blur: shadowBlur,
+        offsetX: shadowOffsetX,
+        offsetY: shadowOffsetY,
+      },
+      outline: {
+        enabled: outlineEnabled,
+        color: outlineColor,
+        width: outlineWidth,
+      },
+    };
+  }
+
+  setupTextEffectsHook(ctx, config, widgetKey) {
+    if (!ctx) return;
+    const self = this;
+    const widgetEffects = this.getTextEffects(config, widgetKey);
+    const subPartOffsets = (config && config.widgetElementOffsets && config.widgetElementOffsets[widgetKey]) || {};
+    const hasSubEffects = Object.values(subPartOffsets).some(
+      (p) => p && (p.textShadow !== undefined || p.textOutline !== undefined)
+    );
+
+    if (!widgetEffects.shadowEnabled && !widgetEffects.outlineEnabled && !hasSubEffects) {
+      return;
+    }
+
+    const origFillText = ctx.fillText;
+    const origStrokeText = ctx.strokeText;
+    const origSave = ctx.save;
+    const origRestore = ctx.restore;
+    let saveDepth = 1;
+
+    ctx.save = function () {
+      saveDepth++;
+      return origSave.apply(ctx, arguments);
+    };
+
+    ctx.restore = function () {
+      saveDepth--;
+      if (saveDepth <= 0) {
+        ctx.fillText = origFillText;
+        ctx.strokeText = origStrokeText;
+        ctx.save = origSave;
+        ctx.restore = origRestore;
+        self.currentSubPart = null;
+        self.currentWidgetRotation = 0;
+      }
+      return origRestore.apply(ctx, arguments);
+    };
+
+    ctx.fillText = function (text, x, y, maxWidth) {
+      if (text === null || text === undefined || text === '') return;
+      const str = String(text);
+
+      let effects = widgetEffects;
+      if (self.currentSubPart && self.currentSubPart.widgetKey === widgetKey) {
+        const pEffects = self.getTextEffects(config, widgetKey, self.currentSubPart.partKey);
+        if (pEffects.shadowEnabled || pEffects.outlineEnabled) {
+          effects = pEffects;
+        }
+      }
+
+      if (effects.outlineEnabled) {
+        origSave.call(ctx);
+        ctx.lineWidth = (effects.outlineWidth || 2) * 2;
+        ctx.strokeStyle = effects.outlineColor || '#000000';
+        ctx.lineJoin = 'round';
+        ctx.miterLimit = 2;
+        if (effects.shadowEnabled) {
+          ctx.shadowColor = effects.shadowColor || 'rgba(0,0,0,0.85)';
+          ctx.shadowBlur = effects.shadowBlur !== undefined ? effects.shadowBlur : 8;
+          ctx.shadowOffsetX = effects.shadowOffsetX || 0;
+          ctx.shadowOffsetY = effects.shadowOffsetY || 3;
+        }
+        if (maxWidth !== undefined) {
+          origStrokeText.call(ctx, str, x, y, maxWidth);
+        } else {
+          origStrokeText.call(ctx, str, x, y);
+        }
+        origRestore.call(ctx);
+      }
+
+      if (effects.shadowEnabled && !effects.outlineEnabled) {
+        origSave.call(ctx);
+        ctx.shadowColor = effects.shadowColor || 'rgba(0,0,0,0.85)';
+        ctx.shadowBlur = effects.shadowBlur !== undefined ? effects.shadowBlur : 8;
+        ctx.shadowOffsetX = effects.shadowOffsetX || 0;
+        ctx.shadowOffsetY = effects.shadowOffsetY || 3;
+        if (maxWidth !== undefined) {
+          origFillText.call(ctx, str, x, y, maxWidth);
+        } else {
+          origFillText.call(ctx, str, x, y);
+        }
+        origRestore.call(ctx);
+      } else {
+        if (maxWidth !== undefined) {
+          origFillText.call(ctx, str, x, y, maxWidth);
+        } else {
+          origFillText.call(ctx, str, x, y);
+        }
+      }
+    };
+  }
+
+  applySubPartEffects(ctx, config, widgetKey, partKey, cx = null, cy = null) {
+    this.currentSubPart = { widgetKey, partKey };
+    const off = this.getElementOffset(config, widgetKey, partKey);
+    if (off && typeof off.rotation === 'number' && off.rotation !== 0 && cx !== null && cy !== null) {
+      ctx.translate(cx, cy);
+      ctx.rotate((off.rotation * Math.PI) / 180);
+      ctx.translate(-cx, -cy);
+    }
+  }
+
   getWidgetPos(config, key, defaultX, defaultY, defaultW, defaultH) {
+    const rot = this.getWidgetRotation(config, key);
     if (config && config.widgetPositions && config.widgetPositions[key]) {
       const p = config.widgetPositions[key];
       return {
@@ -100,6 +331,7 @@ export class OverlayRenderer {
         y: p.y !== undefined ? p.y : defaultY,
         width: p.width !== undefined ? p.width : defaultW,
         height: p.height !== undefined ? p.height : defaultH,
+        rotation: typeof p.rotation === 'number' ? p.rotation : rot,
         isCustom: true,
       };
     }
@@ -108,6 +340,7 @@ export class OverlayRenderer {
       y: defaultY,
       width: defaultW,
       height: defaultH,
+      rotation: rot,
       isCustom: false,
     };
   }
@@ -536,6 +769,7 @@ export class OverlayRenderer {
    * @param {number} scaleMultiplier - Resolution multiplier (1x preview, 2x export)
    */
   render(activity, config, scaleMultiplier = 1) {
+    this.currentConfig = config;
     const ratioSpec = this.getAspectRatioDimensions(config.aspectRatio, config);
     const W = ratioSpec.width * scaleMultiplier;
     const H = ratioSpec.height * scaleMultiplier;
@@ -776,6 +1010,11 @@ export class OverlayRenderer {
    * Layout dispatcher
    */
   renderLayout(ctx, w, h, activity, config, theme, accent) {
+    if (activity && (activity.isWeeklyRecap || config.mode === 'weekly' || config.isWeeklyMode)) {
+      renderWeeklyRecapLayout(this, ctx, w, h, activity, config, theme, accent);
+      return;
+    }
+
     const template = config.template || 'story-pro';
 
     switch (template) {
@@ -1364,6 +1603,7 @@ export class OverlayRenderer {
   // =========================================================================
   drawHeader(ctx, x, y, width, activity, config, theme, accent, customH = null, widgetKey = 'header') {
     ctx.save();
+    const rot = this.applyWidgetRotation(ctx, config, widgetKey, x, y, width, customH || 95);
     const elStyle = this.getElementStyle(config, widgetKey);
     const { text, textMuted, accent: elAccent, cardStyle, align, opacity } = this.getEffectiveColors(config, theme, accent, widgetKey);
     if (opacity < 1) ctx.globalAlpha = opacity;
@@ -1732,6 +1972,11 @@ export class OverlayRenderer {
       this.drawWidgetCardBg(ctx, widgetKey, x, y, width, h, config, theme);
       const padX = (cardStyle !== 'floating') ? 20 : 0;
 
+      const taglineY = y + Math.max(12, Math.round(h * 0.18));
+      const titleY = y + Math.max(26, Math.round(h * 0.58));
+      const dividerY = y + Math.max(34, Math.round(h * 0.72));
+      const subY = y + Math.max(44, Math.round(h * 0.88));
+
       const defaultTagline = "// RUNNER'S LOG — ISSUE 2026 //";
       const taglineText = this.getTextOverride(config, widgetKey, 'tagline', defaultTagline);
       const offTagline = this.getElementOffset(config, widgetKey, 'tagline');
@@ -1739,33 +1984,45 @@ export class OverlayRenderer {
         this.applyZDepth(ctx, offTagline.z || offRunner.z);
         ctx.textAlign = 'left';
         ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'tagline', elAccent);
-        ctx.font = this.getSubPartFont(config, widgetKey, 'tagline', 'bold', 11);
-        ctx.letterSpacing = '3px';
-        ctx.fillText(taglineText, x + padX + offTagline.x, y + 20 + offTagline.y);
+        const tagSize = Math.max(8, Math.min(13, Math.round(h * 0.11)));
+        ctx.font = this.getSubPartFont(config, widgetKey, 'tagline', 'bold', tagSize);
+        ctx.letterSpacing = '2px';
+        ctx.fillText(taglineText, x + padX + offTagline.x, taglineY + offTagline.y);
       }
 
       if (!offTitle.hidden && title) {
         this.applyZDepth(ctx, offTitle.z);
         ctx.textAlign = 'left';
         ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'title', text);
-        ctx.font = this.getSubPartFont(config, widgetKey, 'title', 'bold', 38);
+        const baseTitleSize = Math.max(14, Math.min(48, Math.round(h * 0.38)));
+        let titleFontSize = baseTitleSize;
+        ctx.font = this.getSubPartFont(config, widgetKey, 'title', 'bold', titleFontSize);
         ctx.letterSpacing = '0px';
-        ctx.fillText(title.toUpperCase(), x + padX + offTitle.x, y + 60 + offTitle.y);
+
+        const maxTitleW = width - padX * 2;
+        let measuredW = ctx.measureText(title.toUpperCase()).width;
+        if (measuredW > maxTitleW && maxTitleW > 50) {
+          titleFontSize = Math.max(11, Math.floor(titleFontSize * (maxTitleW / measuredW)));
+          ctx.font = this.getSubPartFont(config, widgetKey, 'title', 'bold', titleFontSize);
+        }
+        ctx.fillText(title.toUpperCase(), x + padX + offTitle.x, titleY + offTitle.y);
       }
 
       ctx.strokeStyle = elAccent;
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.moveTo(x + padX, y + 72);
-      ctx.lineTo(x + width - padX, y + 72);
+      ctx.moveTo(x + padX, dividerY);
+      ctx.lineTo(x + width - padX, dividerY);
       ctx.stroke();
+
+      const subFontSize = Math.max(8, Math.min(14, Math.round(h * 0.12)));
 
       if (!offSub.hidden && (dateText || location)) {
         this.applyZDepth(ctx, offSub.z);
         ctx.textAlign = 'left';
         ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'subtitle', textMuted);
-        ctx.font = this.getSubPartFont(config, widgetKey, 'subtitle', '500', 13);
-        ctx.fillText(`${dateText}${location ? '   |   ' + location : ''}`, x + padX + offSub.x, y + 90 + offSub.y);
+        ctx.font = this.getSubPartFont(config, widgetKey, 'subtitle', '500', subFontSize);
+        ctx.fillText(`${dateText}${location ? '   |   ' + location : ''}`, x + padX + offSub.x, subY + offSub.y);
       }
 
       const athletePrefix = this.getTextOverride(config, widgetKey, 'athletePrefix', 'ATHLETE:');
@@ -1774,9 +2031,9 @@ export class OverlayRenderer {
         this.applyZDepth(ctx, offRunner.z);
         ctx.textAlign = 'right';
         ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'runner', elAccent);
-        ctx.font = this.getSubPartFont(config, widgetKey, 'runner', 'bold', 13);
+        ctx.font = this.getSubPartFont(config, widgetKey, 'runner', 'bold', subFontSize);
         const prefixStr = (!offAthletePrefix.hidden && athletePrefix) ? `${athletePrefix} ` : '';
-        ctx.fillText(`${prefixStr}${runnerName.toUpperCase()}`, x + width - padX + offRunner.x, y + 90 + offRunner.y);
+        ctx.fillText(`${prefixStr}${runnerName.toUpperCase()}`, x + width - padX + offRunner.x, subY + offRunner.y);
       }
 
       ctx.restore();
@@ -2530,6 +2787,7 @@ export class OverlayRenderer {
     if (!activity.hasRoute || !activity.bounds || activity.bounds.minLat === 90) return;
 
     ctx.save();
+    const rot = this.applyWidgetRotation(ctx, config, widgetKey, x, y, width, height);
     const { accent: mapAccent, opacity: mapOpacity, cardStyle } = this.getEffectiveColors(config, theme, accent, widgetKey);
     if (mapOpacity < 1) ctx.globalAlpha = mapOpacity;
     accent = mapAccent;
@@ -2851,46 +3109,357 @@ export class OverlayRenderer {
     ctx.fillStyle = '#ffffff';
     ctx.beginPath(); ctx.arc(endPt[0], endPt[1], 3, 0, Math.PI * 2); ctx.fill();
 
-    // Live Runner Beacon (in animated progress mode)
-    if (activity.runnerPoint) {
-      const [rx, ry] = project(activity.runnerPoint.lat, activity.runnerPoint.lon);
-      ctx.save();
+    // Live Runner Beacon / Marker (in animated progress mode or static preview)
+    const shouldDrawMarker = activity.runnerPoint || (config.mapShowMarkerInStatic !== false && pts && pts.length > 0);
+    if (shouldDrawMarker) {
+      const targetPt = activity.runnerPoint || pts[pts.length - 1];
+      const [rx, ry] = project(targetPt.lat, targetPt.lon);
+
+      // Calculate heading angle along route for directional markers
+      let heading = 0;
+      if (pts && pts.length > 1) {
+        const lookback = Math.min(pts.length - 1, 3);
+        const prevPt = pts[pts.length - 1 - lookback];
+        const [px, py] = project(prevPt.lat, prevPt.lon);
+        const dx = rx - px;
+        const dy = ry - py;
+        if (Math.hypot(dx, dy) > 0.2) {
+          heading = Math.atan2(dy, dx);
+        }
+      }
+
       const pRatio = typeof activity.progress === 'number' ? activity.progress : 1;
-      const pulsePhase = (pRatio * 30) % 1;
-      const pulseR = 8 + 10 * pulsePhase;
+      this.drawMapRunnerMarker(ctx, rx, ry, heading, config, accent, pRatio, widgetKey);
+    }
 
-      // Outer radar pulse ring
-      ctx.beginPath();
-      ctx.arc(rx, ry, pulseR, 0, Math.PI * 2);
-      ctx.strokeStyle = accent;
-      ctx.lineWidth = 2 * (1 - pulsePhase);
-      ctx.stroke();
+    ctx.restore();
+  }
 
-      // Glowing solid runner dot
-      ctx.shadowColor = accent;
-      ctx.shadowBlur = 12;
-      ctx.beginPath();
-      ctx.arc(rx, ry, 6, 0, Math.PI * 2);
-      ctx.fillStyle = '#ffffff';
-      ctx.fill();
-      ctx.strokeStyle = accent;
-      ctx.lineWidth = 2.5;
-      ctx.stroke();
+  // =========================================================================
+  // ANIMATION RUNNER MARKER (Corsair, Dot, Chevron, Pulse Ring, Target, Diamond, Pin, Minimal Dot)
+  // =========================================================================
+  drawMapRunnerMarker(ctx, rx, ry, heading, config, accent, pRatio = 1, widgetKey = 'map') {
+    const offMarker = this.getElementOffset(config, widgetKey, 'marker');
+    if (offMarker && offMarker.hidden) return;
 
-      // Tag pill above runner
-      const runnerTag = '▲ RUNNER';
-      ctx.font = 'bold 9px monospace';
-      ctx.textAlign = 'center';
-      const tagW = ctx.measureText(runnerTag).width + 8;
-      this.drawRoundedRect(ctx, rx - tagW / 2, ry - 22, tagW, 14, 4);
-      ctx.fillStyle = '#0a0a12';
-      ctx.fill();
-      ctx.strokeStyle = accent;
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.fillStyle = accent;
-      ctx.fillText(runnerTag, rx, ry - 12);
-      ctx.restore();
+    rx += (offMarker ? offMarker.x : 0);
+    ry += (offMarker ? offMarker.y : 0);
+
+    const subColor = this.getSubPartColor(config, widgetKey, 'marker', null);
+    const markerColor = subColor || config.mapMarkerColor || accent;
+    const baseR = typeof config.mapMarkerSize === 'number' ? config.mapMarkerSize : 14;
+    const markerStyle = config.mapMarkerStyle || 'corsair';
+    const showPulse = config.mapMarkerPulse !== false;
+    const pulsePhase = (pRatio * 30) % 1;
+
+    ctx.save();
+
+    switch (markerStyle) {
+      case 'corsair':
+      case 'crosshair': {
+        // Tactical HUD Crosshair (Optic reticle)
+        if (showPulse) {
+          const pulseR = baseR + 12 * pulsePhase;
+          ctx.beginPath();
+          ctx.arc(rx, ry, pulseR, 0, Math.PI * 2);
+          ctx.strokeStyle = markerColor;
+          ctx.lineWidth = 1.5 * (1 - pulsePhase);
+          ctx.stroke();
+        }
+
+        ctx.shadowColor = markerColor;
+        ctx.shadowBlur = 8;
+
+        // Circular reticle ring
+        ctx.beginPath();
+        ctx.arc(rx, ry, baseR * 0.7, 0, Math.PI * 2);
+        ctx.strokeStyle = markerColor;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Crosshairs extending across
+        const lineLen = baseR * 1.25;
+        const gap = baseR * 0.35;
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = markerColor;
+        ctx.beginPath();
+        // Top
+        ctx.moveTo(rx, ry - gap);
+        ctx.lineTo(rx, ry - lineLen);
+        // Bottom
+        ctx.moveTo(rx, ry + gap);
+        ctx.lineTo(rx, ry + lineLen);
+        // Left
+        ctx.moveTo(rx - gap, ry);
+        ctx.lineTo(rx - lineLen, ry);
+        // Right
+        ctx.moveTo(rx + gap, ry);
+        ctx.lineTo(rx + lineLen, ry);
+        ctx.stroke();
+
+        // Precision center pip
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(rx, ry, Math.max(2, baseR * 0.2), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = markerColor;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // 4 tactical corner ticks
+        const bDist = baseR * 0.95;
+        const bLen = baseR * 0.3;
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = markerColor;
+        ctx.beginPath();
+        // Top-left
+        ctx.moveTo(rx - bDist, ry - bDist + bLen);
+        ctx.lineTo(rx - bDist, ry - bDist);
+        ctx.lineTo(rx - bDist + bLen, ry - bDist);
+        // Top-right
+        ctx.moveTo(rx + bDist - bLen, ry - bDist);
+        ctx.lineTo(rx + bDist, ry - bDist);
+        ctx.lineTo(rx + bDist, ry - bDist + bLen);
+        // Bottom-left
+        ctx.moveTo(rx - bDist, ry + bDist - bLen);
+        ctx.lineTo(rx - bDist, ry + bDist);
+        ctx.lineTo(rx - bDist + bLen, ry + bDist);
+        // Bottom-right
+        ctx.moveTo(rx + bDist - bLen, ry + bDist);
+        ctx.lineTo(rx + bDist, ry + bDist);
+        ctx.lineTo(rx + bDist, ry + bDist - bLen);
+        ctx.stroke();
+        break;
+      }
+
+      case 'dot': {
+        // Glowing Radar Pulse Dot
+        if (showPulse) {
+          const pulseR = baseR * 0.75 + 14 * pulsePhase;
+          ctx.beginPath();
+          ctx.arc(rx, ry, pulseR, 0, Math.PI * 2);
+          ctx.strokeStyle = markerColor;
+          ctx.lineWidth = 2.5 * (1 - pulsePhase);
+          ctx.stroke();
+        }
+
+        ctx.shadowColor = markerColor;
+        ctx.shadowBlur = 12;
+
+        // Outer beacon circle
+        ctx.beginPath();
+        ctx.arc(rx, ry, baseR * 0.55, 0, Math.PI * 2);
+        ctx.fillStyle = markerColor;
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Luminous white inner center
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(rx, ry, baseR * 0.28, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+
+      case 'pulse-ring':
+      case 'sonar': {
+        // Sonar / Multi-Wave Ripple Rings
+        [0, 0.45].forEach((offset) => {
+          const phase = (pulsePhase + offset) % 1;
+          const r = baseR * 0.45 + baseR * 1.35 * phase;
+          ctx.beginPath();
+          ctx.arc(rx, ry, r, 0, Math.PI * 2);
+          ctx.strokeStyle = markerColor;
+          ctx.lineWidth = 2.2 * (1 - phase);
+          ctx.stroke();
+        });
+
+        ctx.shadowColor = markerColor;
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(rx, ry, baseR * 0.38, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.strokeStyle = markerColor;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        break;
+      }
+
+      case 'chevron':
+      case 'arrow': {
+        // Directional Navigation Arrow / Chevron (Oriented by heading angle)
+        ctx.translate(rx, ry);
+        ctx.rotate(heading);
+
+        if (showPulse) {
+          ctx.beginPath();
+          ctx.arc(0, 0, baseR * 1.1 + 8 * pulsePhase, 0, Math.PI * 2);
+          ctx.strokeStyle = markerColor;
+          ctx.lineWidth = 1.5 * (1 - pulsePhase);
+          ctx.stroke();
+        }
+
+        ctx.shadowColor = markerColor;
+        ctx.shadowBlur = 10;
+
+        // Aerodynamic stealth chevron pointing towards positive X
+        ctx.beginPath();
+        ctx.moveTo(baseR * 0.95, 0); // Tip
+        ctx.lineTo(-baseR * 0.65, -baseR * 0.65); // Top wing
+        ctx.lineTo(-baseR * 0.3, 0); // Inner notch
+        ctx.lineTo(-baseR * 0.65, baseR * 0.65); // Bottom wing
+        ctx.closePath();
+
+        ctx.fillStyle = markerColor;
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.8;
+        ctx.stroke();
+
+        // Forward core pip
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(baseR * 0.25, 0, baseR * 0.18, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+
+      case 'target':
+      case 'bullseye': {
+        // Bullseye Precision Target Reticle
+        if (showPulse) {
+          ctx.beginPath();
+          ctx.arc(rx, ry, baseR * 1.1 + 10 * pulsePhase, 0, Math.PI * 2);
+          ctx.strokeStyle = markerColor;
+          ctx.lineWidth = 1.5 * (1 - pulsePhase);
+          ctx.stroke();
+        }
+
+        ctx.shadowColor = markerColor;
+        ctx.shadowBlur = 8;
+
+        // Outer ring
+        ctx.beginPath();
+        ctx.arc(rx, ry, baseR * 0.85, 0, Math.PI * 2);
+        ctx.strokeStyle = markerColor;
+        ctx.lineWidth = 1.8;
+        ctx.stroke();
+
+        // Inner ring
+        ctx.beginPath();
+        ctx.arc(rx, ry, baseR * 0.48, 0, Math.PI * 2);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Center dot
+        ctx.beginPath();
+        ctx.arc(rx, ry, baseR * 0.22, 0, Math.PI * 2);
+        ctx.fillStyle = markerColor;
+        ctx.fill();
+
+        // Cardinal tick marks
+        const tDist = baseR * 0.85;
+        const tLen = baseR * 0.25;
+        ctx.beginPath();
+        [[0, -1], [0, 1], [-1, 0], [1, 0]].forEach(([dx, dy]) => {
+          ctx.moveTo(rx + dx * (tDist - tLen), ry + dy * (tDist - tLen));
+          ctx.lineTo(rx + dx * (tDist + tLen), ry + dy * (tDist + tLen));
+        });
+        ctx.strokeStyle = markerColor;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        break;
+      }
+
+      case 'diamond': {
+        // Cyberpunk Diamond HUD
+        if (showPulse) {
+          const pr = baseR * 0.85 + 12 * pulsePhase;
+          ctx.save();
+          ctx.translate(rx, ry);
+          ctx.rotate(Math.PI / 4);
+          ctx.strokeStyle = markerColor;
+          ctx.lineWidth = 1.5 * (1 - pulsePhase);
+          ctx.strokeRect(-pr, -pr, pr * 2, pr * 2);
+          ctx.restore();
+        }
+
+        ctx.shadowColor = markerColor;
+        ctx.shadowBlur = 10;
+
+        ctx.save();
+        ctx.translate(rx, ry);
+        ctx.rotate(Math.PI / 4);
+        const dSize = baseR * 0.65;
+        ctx.strokeStyle = markerColor;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(-dSize, -dSize, dSize * 2, dSize * 2);
+
+        // Inner solid diamond
+        const innerD = baseR * 0.28;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-innerD, -innerD, innerD * 2, innerD * 2);
+        ctx.restore();
+        break;
+      }
+
+      case 'pin': {
+        // Modern GPS Location Map Pin
+        if (showPulse) {
+          ctx.beginPath();
+          ctx.ellipse(rx, ry, baseR * 0.65 * (1 + pulsePhase), baseR * 0.28 * (1 + pulsePhase), 0, 0, Math.PI * 2);
+          ctx.strokeStyle = markerColor;
+          ctx.lineWidth = 1.5 * (1 - pulsePhase);
+          ctx.stroke();
+        }
+
+        ctx.shadowColor = markerColor;
+        ctx.shadowBlur = 10;
+
+        const pinH = baseR * 1.8;
+        const bulbR = baseR * 0.65;
+        const bulbCy = ry - pinH + bulbR;
+
+        ctx.beginPath();
+        ctx.arc(rx, bulbCy, bulbR, Math.PI * 0.75, Math.PI * 2.25, false);
+        ctx.lineTo(rx, ry);
+        ctx.closePath();
+
+        ctx.fillStyle = markerColor;
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.6;
+        ctx.stroke();
+
+        ctx.fillStyle = '#0a0a14';
+        ctx.beginPath();
+        ctx.arc(rx, bulbCy, bulbR * 0.42, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+
+      case 'minimal-dot':
+      default: {
+        // Crisp Minimalist Dot (no pulse wave, sharp borders)
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
+        ctx.shadowBlur = 5;
+
+        const dotR = baseR * 0.48;
+        ctx.beginPath();
+        ctx.arc(rx, ry, dotR + 1.8, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(rx, ry, dotR, 0, Math.PI * 2);
+        ctx.fillStyle = markerColor;
+        ctx.fill();
+        break;
+      }
     }
 
     ctx.restore();
@@ -2902,6 +3471,7 @@ export class OverlayRenderer {
   // =========================================================================
   drawHeroStat(ctx, x, y, width, activity, config, theme, accent, customH = null, widgetKey = 'hero') {
     ctx.save();
+    const rot = this.applyWidgetRotation(ctx, config, widgetKey, x, y, width, customH || 105);
     const elStyle = this.getElementStyle(config, widgetKey);
     const { text, textMuted, accent: elAccent, cardStyle, align, opacity } = this.getEffectiveColors(config, theme, accent, widgetKey);
     if (opacity < 1) ctx.globalAlpha = opacity;
@@ -2947,6 +3517,104 @@ export class OverlayRenderer {
 
     const h = customH || 105;
     this.recordBounds(widgetKey, 'Hero Metric', x, y, width, h);
+
+    // TEMPLATE: MAGAZINE HEADLINE (Bold cover layout)
+    if (design === 'magazine-headline') {
+      this.drawWidgetCardBg(ctx, widgetKey, x, y, width, h, config, theme);
+      const padX = (cardStyle !== 'floating') ? 22 : 6;
+
+      // 1. Tagline / Issue Header
+      const defaultTagline = "// RUNNER'S EDITORIAL — COVER FEATURE //";
+      const taglineText = this.getTextOverride(config, widgetKey, 'tagline', (label || defaultTagline).toUpperCase());
+      const offTagline = this.getElementOffset(config, widgetKey, 'tagline');
+      const tagY = y + Math.max(12, Math.round(h * 0.18));
+      if (!offTagline.hidden && taglineText) {
+        this.applyZDepth(ctx, offTagline.z || offLabel.z);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'tagline', elAccent);
+        const tagSize = Math.max(8, Math.min(13, Math.round(h * 0.11)));
+        ctx.font = this.getSubPartFont(config, widgetKey, 'tagline', 'bold', tagSize);
+        ctx.letterSpacing = '2px';
+        ctx.fillText(taglineText, x + padX + offTagline.x, tagY + offTagline.y);
+      }
+
+      // 2. Giant Editorial Number and Unit
+      const valY = y + Math.max(28, Math.round(h * 0.62));
+      const valBaseSize = Math.max(20, Math.min(68, Math.round(h * 0.46)));
+      let valFontSize = valBaseSize;
+      
+      if (!offVal.hidden && mainVal) {
+        this.applyZDepth(ctx, offVal.z);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'val', text);
+        ctx.font = this.getSubPartFont(config, widgetKey, 'val', 'bold', valFontSize);
+        ctx.letterSpacing = '0px';
+
+        // Auto-fit value & unit to width
+        let valW = ctx.measureText(mainVal).width;
+        const maxValW = (width - padX * 2) * 0.72;
+        if (valW > maxValW && maxValW > 60) {
+          valFontSize = Math.max(16, Math.floor(valFontSize * (maxValW / valW)));
+          ctx.font = this.getSubPartFont(config, widgetKey, 'val', 'bold', valFontSize);
+          valW = ctx.measureText(mainVal).width;
+        }
+        ctx.fillText(mainVal, x + padX + offVal.x, valY + offVal.y);
+
+        // Unit badge next to value
+        if (!offUnit.hidden && mainUnit) {
+          this.applyZDepth(ctx, offUnit.z);
+          const unitSize = Math.max(10, Math.min(22, Math.round(valFontSize * 0.38)));
+          ctx.font = this.getSubPartFont(config, widgetKey, 'unit', 'bold', unitSize);
+          ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'unit', elAccent);
+          ctx.letterSpacing = '1px';
+          ctx.fillText(mainUnit.toUpperCase(), x + padX + valW + 10 + offUnit.x, valY - Math.round(valFontSize * 0.12) + offUnit.y);
+        }
+      }
+
+      // 3. Editorial Accent Divider Line
+      const dividerY = y + Math.max(34, Math.round(h * 0.74));
+      ctx.strokeStyle = elAccent;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x + padX, dividerY);
+      ctx.lineTo(x + width - padX, dividerY);
+      ctx.stroke();
+
+      // 4. Subtitle / Metadata row underneath divider
+      const subY = y + Math.max(44, Math.round(h * 0.90));
+      const subSize = Math.max(8, Math.min(13, Math.round(h * 0.12)));
+
+      const secStats = [];
+      if (heroType !== 'time' && activity.durationFormatted) secStats.push(`TIME: ${activity.durationFormatted}`);
+      if (heroType !== 'pace' && activity.avgPaceFormatted) secStats.push(`PACE: ${activity.avgPaceFormatted}`);
+      if (heroType !== 'hr' && (activity.avgHr || activity.heartrate?.avg)) secStats.push(`HR: ${activity.avgHr || activity.heartrate.avg} BPM`);
+      const defaultSecText = secStats.join('   |   ') || 'OFFICIAL TELEMETRY RECORD';
+      const secText = this.getTextOverride(config, widgetKey, 'secondary', defaultSecText);
+
+      if (!offSec.hidden && secText) {
+        this.applyZDepth(ctx, offSec.z);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'secondary', textMuted);
+        ctx.font = this.getSubPartFont(config, widgetKey, 'secondary', '600', subSize);
+        ctx.letterSpacing = '0.5px';
+        ctx.fillText(secText, x + padX + offSec.x, subY + offSec.y);
+      }
+
+      // Right-aligned issue badge / status
+      const issueTag = this.getTextOverride(config, widgetKey, 'issueTag', 'GPS VERIFIED');
+      const offIssueTag = this.getElementOffset(config, widgetKey, 'issueTag');
+      if (!offIssueTag.hidden && issueTag) {
+        this.applyZDepth(ctx, offIssueTag.z);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'issueTag', elAccent);
+        ctx.font = `bold ${subSize}px monospace`;
+        ctx.fillText(issueTag, x + width - padX + offIssueTag.x, subY + offIssueTag.y);
+      }
+
+      ctx.restore();
+      this.recordBounds(widgetKey, 'Hero Metric', x, y, width, h);
+      return y + h;
+    }
 
     if (design === 'centered-radial-pod') {
       // Centered Radial Stadium Pod (Glowing Halo & Unit Badge)
@@ -3092,15 +3760,21 @@ export class OverlayRenderer {
       const effAlign = this.getWidgetAlign(align, 'center');
       const cx = this.getAlignX(effAlign, x, width, 24, 'center');
 
+      const labelY = y + Math.max(12, Math.round(monoH * 0.22));
+      const valY = y + Math.max(28, Math.round(monoH * 0.68));
+      const barY = y + Math.max(34, Math.round(monoH * 0.77));
+      const unitY = y + Math.max(44, Math.round(monoH * 0.92));
+
       // Top label
       if (!offLabel.hidden && label) {
         ctx.save();
         this.applyZDepth(ctx, offLabel.z);
         ctx.textAlign = effAlign;
         ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'label', elAccent);
-        ctx.font = this.getSubPartFont(config, widgetKey, 'label', 'bold', 12);
+        const labelSize = Math.max(8, Math.min(13, Math.round(monoH * 0.11)));
+        ctx.font = this.getSubPartFont(config, widgetKey, 'label', 'bold', labelSize);
         ctx.letterSpacing = '3px';
-        ctx.fillText(label.toUpperCase(), cx + offLabel.x, y + 26 + offLabel.y);
+        ctx.fillText(label.toUpperCase(), cx + offLabel.x, labelY + offLabel.y);
         ctx.restore();
       }
 
@@ -3110,17 +3784,18 @@ export class OverlayRenderer {
         this.applyZDepth(ctx, offVal.z);
         ctx.textAlign = effAlign;
         ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'val', text);
-        ctx.font = this.getSubPartFont(config, widgetKey, 'val', 'bold', 62);
+        const valSize = Math.max(18, Math.min(62, Math.round(monoH * 0.48)));
+        ctx.font = this.getSubPartFont(config, widgetKey, 'val', 'bold', valSize);
         ctx.shadowColor = 'rgba(0,0,0,0.85)';
         ctx.shadowBlur = 12;
-        ctx.fillText(mainVal, cx + offVal.x, y + 84 + offVal.y);
+        ctx.fillText(mainVal, cx + offVal.x, valY + offVal.y);
         ctx.restore();
       }
 
       // Neon underline bar
       const barW = Math.min(100, width * 0.3);
       const barX = effAlign === 'left' ? x + 24 : effAlign === 'right' ? x + width - 24 - barW : cx - barW / 2;
-      this.drawRoundedRect(ctx, barX, y + 94, barW, 4, 2);
+      this.drawRoundedRect(ctx, barX, barY, barW, Math.max(2, Math.round(monoH * 0.035)), 2);
       ctx.fillStyle = elAccent;
       ctx.shadowColor = elAccent;
       ctx.shadowBlur = 8;
@@ -3133,9 +3808,10 @@ export class OverlayRenderer {
         this.applyZDepth(ctx, offUnit.z);
         ctx.textAlign = effAlign;
         ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'unit', textMuted);
-        ctx.font = this.getSubPartFont(config, widgetKey, 'unit', 'bold', 13);
+        const unitSize = Math.max(9, Math.min(14, Math.round(monoH * 0.11)));
+        ctx.font = this.getSubPartFont(config, widgetKey, 'unit', 'bold', unitSize);
         ctx.letterSpacing = '2px';
-        ctx.fillText(mainUnit.toUpperCase(), cx + offUnit.x, y + 114 + offUnit.y);
+        ctx.fillText(mainUnit.toUpperCase(), cx + offUnit.x, unitY + offUnit.y);
         ctx.restore();
       }
 
@@ -3150,7 +3826,7 @@ export class OverlayRenderer {
       }
       ctx.strokeStyle = elAccent;
       ctx.lineWidth = 2;
-      const bLen = 16;
+      const bLen = Math.min(16, Math.max(6, Math.round(h * 0.16)));
       ctx.beginPath();
       ctx.moveTo(x + 8, y + 8 + bLen); ctx.lineTo(x + 8, y + 8); ctx.lineTo(x + 8 + bLen, y + 8);
       ctx.moveTo(x + width - 8 - bLen, y + 8); ctx.lineTo(x + width - 8, y + 8); ctx.lineTo(x + width - 8, y + 8 + bLen);
@@ -3161,26 +3837,32 @@ export class OverlayRenderer {
       const effAlign = this.getWidgetAlign(align, 'left');
       const startX = this.getAlignX(effAlign, x, width, 24, 'left');
 
+      const labelY = y + Math.max(14, Math.round(h * 0.30));
+      const valY = y + Math.max(28, Math.round(h * 0.78));
+
       if (!offLabel.hidden && label) {
         ctx.textAlign = effAlign;
         ctx.fillStyle = elAccent;
-        ctx.font = this.getSubPartFont(config, widgetKey, 'label', 'bold', 11);
+        const labelSize = Math.max(8, Math.min(13, Math.round(h * 0.12)));
+        ctx.font = this.getSubPartFont(config, widgetKey, 'label', 'bold', labelSize);
         const dotX = effAlign === 'left' ? startX : effAlign === 'right' ? startX - ctx.measureText(label.toUpperCase()).width - 12 : startX - ctx.measureText(label.toUpperCase()).width / 2 - 10;
-        ctx.beginPath(); ctx.arc(dotX, y + 26, 4, 0, Math.PI * 2); ctx.fill();
-        ctx.fillText(label.toUpperCase(), effAlign === 'left' ? startX + 10 : startX, y + 30);
+        ctx.beginPath(); ctx.arc(dotX, labelY - 4, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.fillText(label.toUpperCase(), effAlign === 'left' ? startX + 10 : startX, labelY);
       }
 
       if (!offVal.hidden && mainVal) {
         ctx.fillStyle = text;
-        ctx.font = this.getSubPartFont(config, widgetKey, 'val', 'bold', 56);
+        const valFontSize = Math.max(18, Math.min(56, Math.round(h * 0.50)));
+        ctx.font = this.getSubPartFont(config, widgetKey, 'val', 'bold', valFontSize);
         const valW = ctx.measureText(mainVal).width;
-        ctx.fillText(mainVal, startX, y + 84);
+        ctx.fillText(mainVal, startX, valY);
 
         if (mainUnit && !offUnit.hidden) {
           ctx.fillStyle = elAccent;
-          ctx.font = this.getSubPartFont(config, widgetKey, 'unit', 'bold', 22);
+          const unitFontSize = Math.max(10, Math.min(22, Math.round(valFontSize * 0.40)));
+          ctx.font = this.getSubPartFont(config, widgetKey, 'unit', 'bold', unitFontSize);
           const uX = effAlign === 'left' ? startX + valW + 12 : effAlign === 'right' ? startX - valW - 12 : startX + valW / 2 + 12;
-          ctx.fillText(mainUnit, uX, y + 82);
+          ctx.fillText(mainUnit, uX, valY - 2);
         }
       }
 
@@ -3189,8 +3871,9 @@ export class OverlayRenderer {
       if (effAlign !== 'right' && !offStatus.hidden && statusBadge) {
         ctx.textAlign = 'right';
         ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'statusBadge', textMuted);
-        ctx.font = `bold 10px monospace`;
-        ctx.fillText(statusBadge, x + width - 24 + offStatus.x, y + 82 + offStatus.y);
+        const statusSize = Math.max(8, Math.min(11, Math.round(h * 0.11)));
+        ctx.font = `bold ${statusSize}px monospace`;
+        ctx.fillText(statusBadge, x + width - 24 + offStatus.x, valY - 2 + offStatus.y);
       }
 
       ctx.restore();
@@ -4098,6 +4781,7 @@ export class OverlayRenderer {
   // =========================================================================
   drawMetricsGrid(ctx, x, y, width, activity, config, theme, accent, cols = 3, customH = null, widgetKey = 'metrics') {
     ctx.save();
+    const rot = this.applyWidgetRotation(ctx, config, widgetKey, x, y, width, customH || 95);
     const elStyle = this.getElementStyle(config, widgetKey);
     const { text, textMuted, accent: elAccent, cardStyle, align, opacity } = this.getEffectiveColors(config, theme, accent, widgetKey);
     if (opacity < 1) ctx.globalAlpha = opacity;
@@ -5546,6 +6230,7 @@ export class OverlayRenderer {
     if (!items || items.length === 0) return y;
 
     ctx.save();
+    const rot = this.applyWidgetRotation(ctx, config, widgetKey, x, y, width, chartH);
     const elStyle = this.getElementStyle(config, widgetKey);
     const { text, textMuted, accent: elAccent, cardStyle, align, opacity } = this.getEffectiveColors(config, theme, accent, widgetKey);
     if (opacity < 1) ctx.globalAlpha = opacity;
@@ -6765,6 +7450,7 @@ export class OverlayRenderer {
     const targetTimeFormatted = isTargetLive ? (target.displayTimeFormatted || target.timeFormatted) : target.timeFormatted;
 
     ctx.save();
+    const rot = this.applyWidgetRotation(ctx, config, widgetKey, x, y, width, customH || 115);
     const elStyle = this.getElementStyle(config, widgetKey);
     const { text, textMuted, accent: elAccent, cardStyle, align, opacity } = this.getEffectiveColors(config, theme, accent, widgetKey);
     if (opacity < 1) ctx.globalAlpha = opacity;
@@ -7452,6 +8138,7 @@ export class OverlayRenderer {
     if (!pts || pts.length < 3) return;
 
     ctx.save();
+    const rot = this.applyWidgetRotation(ctx, config, widgetKey, x, y, width, height);
     const elStyle = this.getElementStyle(config, widgetKey);
     const { text, textMuted, accent: elAccent, cardStyle, align, opacity } = this.getEffectiveColors(config, theme, accent, widgetKey);
     if (opacity < 1) ctx.globalAlpha = opacity;
@@ -7970,6 +8657,7 @@ export class OverlayRenderer {
     if (!pts || pts.length < 3) return y;
 
     ctx.save();
+    const rot = this.applyWidgetRotation(ctx, config, widgetKey, x, y, width, height);
     const elStyle = this.getElementStyle(config, widgetKey);
     const { text, textMuted, accent: elAccent, cardStyle, align, opacity } = this.getEffectiveColors(config, theme, accent, widgetKey);
     if (opacity < 1) ctx.globalAlpha = opacity;
@@ -8384,6 +9072,7 @@ export class OverlayRenderer {
     if (!pts || pts.length < 3) return y;
 
     ctx.save();
+    const rot = this.applyWidgetRotation(ctx, config, widgetKey, x, y, width, height);
     const elStyle = this.getElementStyle(config, widgetKey);
     const { text, textMuted, accent: elAccent, cardStyle, align, opacity } = this.getEffectiveColors(config, theme, accent, widgetKey);
     if (opacity < 1) ctx.globalAlpha = opacity;
@@ -8789,6 +9478,7 @@ export class OverlayRenderer {
     if (!activity.avgHr) return y;
 
     ctx.save();
+    const rot = this.applyWidgetRotation(ctx, config, widgetKey, x, y, width, customH || 60);
     const elStyle = this.getElementStyle(config, widgetKey);
     const { text, textMuted, accent: elAccent, cardStyle, align, opacity } = this.getEffectiveColors(config, theme, accent, widgetKey);
     if (opacity < 1) ctx.globalAlpha = opacity;
@@ -9566,6 +10256,7 @@ export class OverlayRenderer {
     if (!zones) return y;
 
     ctx.save();
+    const rot = this.applyWidgetRotation(ctx, config, widgetKey, x, y, width, customH || 48);
     const elStyle = this.getElementStyle(config, widgetKey);
     const { text, textMuted, accent: elAccent, align, opacity } = this.getEffectiveColors(config, theme, accent, widgetKey);
     if (opacity < 1) ctx.globalAlpha = opacity;
@@ -9709,6 +10400,7 @@ export class OverlayRenderer {
 
   drawBrandWatermark(ctx, x, y, width, config, theme, accent, customH = null, widgetKey = 'brand') {
     ctx.save();
+    const rot = this.applyWidgetRotation(ctx, config, widgetKey, x, y - 14, width, customH || 28);
     const elStyle = this.getElementStyle(config, widgetKey);
     const { text, textMuted, accent: elAccent, align, opacity } = this.getEffectiveColors(config, theme, accent, widgetKey);
     if (opacity < 1) ctx.globalAlpha = opacity;
@@ -9916,6 +10608,14 @@ export class OverlayRenderer {
       let x = item.x !== undefined ? item.x : (w - boxW) / 2;
       let y = item.y !== undefined ? item.y : (h - boxH) / 2;
 
+      // Rotation around item center
+      const itemRot = typeof item.rotation === 'number' ? item.rotation : 0;
+      if (itemRot !== 0) {
+        ctx.translate(x + boxW / 2, y + boxH / 2);
+        ctx.rotate((itemRot * Math.PI) / 180);
+        ctx.translate(-(x + boxW / 2), -(y + boxH / 2));
+      }
+
       // Draw background if specified
       if (bgStyle === 'pill') {
         this.drawRoundedRect(ctx, x, y, boxW, boxH, boxH / 2);
@@ -9945,23 +10645,53 @@ export class OverlayRenderer {
         ctx.stroke();
       }
 
+      let drawTextX = x + boxW / 2;
+      if (align === 'left') drawTextX = x + padX;
+      else if (align === 'right') drawTextX = x + boxW - padX;
+
+      const hasShadow = item.textShadow !== false && (item.textShadow || item.shadowColor);
+      const hasOutline = !!item.textOutline;
+
+      if (hasOutline) {
+        ctx.save();
+        ctx.lineWidth = (item.textOutlineWidth || 2) * 2;
+        ctx.strokeStyle = item.textOutlineColor || '#000000';
+        ctx.lineJoin = 'round';
+        ctx.miterLimit = 2;
+        ctx.textAlign = align;
+        ctx.textBaseline = 'middle';
+        if (hasShadow) {
+          ctx.shadowColor = item.textShadowColor || item.shadowColor || 'rgba(0, 0, 0, 0.8)';
+          ctx.shadowBlur = item.textShadowBlur !== undefined ? item.textShadowBlur : 8;
+          ctx.shadowOffsetX = item.textShadowOffsetX || 0;
+          ctx.shadowOffsetY = item.textShadowOffsetY || 3;
+        }
+        ctx.strokeText(item.text, drawTextX, y + boxH / 2);
+        ctx.restore();
+      }
+
       // Draw Text
       ctx.fillStyle = color;
       ctx.textAlign = align;
       ctx.textBaseline = 'middle';
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-      ctx.shadowBlur = 8;
-
-      let drawTextX = x + boxW / 2;
-      if (align === 'left') drawTextX = x + padX;
-      else if (align === 'right') drawTextX = x + boxW - padX;
+      if (hasShadow && !hasOutline) {
+        ctx.shadowColor = item.textShadowColor || item.shadowColor || 'rgba(0, 0, 0, 0.8)';
+        ctx.shadowBlur = item.textShadowBlur !== undefined ? item.textShadowBlur : 8;
+        ctx.shadowOffsetX = item.textShadowOffsetX || 0;
+        ctx.shadowOffsetY = item.textShadowOffsetY || 3;
+      } else {
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+      }
 
       ctx.fillText(item.text, drawTextX, y + boxH / 2);
       ctx.restore();
 
       // Record bounds for drag & drop hit test
       const itemId = item.id || `custom_${index}`;
-      this.recordBounds(itemId, item.text, x, y, boxW, boxH);
+      this.recordBounds(itemId, item.text, x, y, boxW, boxH, itemRot);
     });
     ctx.restore();
   }

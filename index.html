@@ -86,6 +86,9 @@
               <div class="gizmo-handle handle-s" data-handle="s"></div>
               <div class="gizmo-handle handle-sw" data-handle="sw"></div>
               <div class="gizmo-handle handle-w" data-handle="w"></div>
+              <!-- Rotation Handle stem and knob -->
+              <div class="gizmo-rot-stem"></div>
+              <div class="gizmo-handle handle-rot" data-handle="rot" title="Drag to rotate widget"></div>
             </div>
           </div>
         </div>
@@ -192,6 +195,10 @@
           <span class="tab-icon">📁</span>
           <span>Activity</span>
         </button>
+        <button class="tab-btn" data-tab="weeklyTab">
+          <span class="tab-icon">📅</span>
+          <span>Weekly Recap</span>
+        </button>
         <button class="tab-btn" data-tab="formatTab">
           <span class="tab-icon">📐</span>
           <span>Format</span>
@@ -260,6 +267,467 @@
             <div class="form-group">
               <label class="form-label">Weather Badge (Optional)</label>
               <input type="text" id="inputWeatherText" class="form-input" placeholder="18°C ☀️ Sunny">
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB: WEEKLY & BATCH STAT OVERLAY -->
+        <div class="tab-pane" id="weeklyTab">
+          <div class="section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+              <div class="section-title" style="margin-bottom: 0;">Multi-Run Batch Ingestion</div>
+              <div style="display: flex; gap: 6px;">
+                <button type="button" id="weeklyUndoBtn" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 3px;" title="Undo Weekly Action (Ctrl+Z)" disabled>
+                  <span>↶</span> Undo
+                </button>
+                <button type="button" id="weeklyRedoBtn" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 3px;" title="Redo Weekly Action (Ctrl+Y)" disabled>
+                  <span>↷</span> Redo
+                </button>
+                <button type="button" id="weeklyLoadDemoBtn" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;">
+                  ⚡ Load Demo Week
+                </button>
+                <button type="button" id="weeklyClearBtn" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;" title="Clear All Runs">
+                  🗑️
+                </button>
+              </div>
+            </div>
+
+            <div class="dropzone" id="weeklyDropzone">
+              <input type="file" id="weeklyFileInput" accept=".zip,.fit,.tcx,.gpx,.json" multiple>
+              <div class="dropzone-icon">📦</div>
+              <div class="dropzone-text">Drop .ZIP file or multiple .FIT / .TCX / .GPX</div>
+              <div class="dropzone-sub">Unpacks all runs locally & aggregates weekly statistics</div>
+            </div>
+            <div id="weeklyStatusMsg" style="display: none; margin-top: 8px; font-size: 0.75rem; color: var(--accent-volt); text-align: center;"></div>
+          </div>
+
+          <!-- WEEKLY TEMPLATES -->
+          <div class="section">
+            <div class="section-title">Weekly Overlay Template</div>
+            <select id="weeklyTemplateSelect" class="form-select" style="margin-bottom: 10px; font-weight: 600;">
+              <option value="cards-grid">🗂️ Weekly Digest & Run Cards (KPIs + Day Volume + Mini Routes)</option>
+              <option value="routes-matrix">🗺️ Multi-Route Matrix (Neon Silhouettes & Glass Cards)</option>
+              <option value="mileage-pillar">🏛️ Athletic Mileage Pillar HUD (Total Dist + Day Pillars + Telemetry)</option>
+              <option value="training-log">📋 Marathon Training Log Sheet (Structured Ledger & Targets)</option>
+              <option value="unified-map">🌐 All Routes Unified GPS Map (All Routes on 1 Global Map)</option>
+              <option value="minimal-editorial">📰 Minimalist Editorial Weekly (High-Fashion Serif & Session List)</option>
+              <option value="cyber-neon-hud">⚡ Cyber Neon HUD (Futuristic Telemetry Console & Circuit Gauges)</option>
+              <option value="magazine-cover">📰 Bold Magazine Cover (Editorial Masthead & Big Hero Cutout)</option>
+              <option value="split-comparison">⚡ Split & Session Comparison (Pace Curves & Head-to-Head)</option>
+              <option value="calendar-heat">📅 Calendar Training Heatmap (7-Day Matrix & Volume Staircase)</option>
+              <option value="polar-radar">🕸️ Polar Radar Telemetry (Athletic Balance Spider Chart & Arcs)</option>
+              <option value="monolith-stat">🏛️ Swiss Brutalist Monolith (Monumental Tabular Typography & Division)</option>
+            </select>
+          </div>
+
+          <!-- HEADER & TARGET GOAL -->
+          <div class="section">
+            <div class="section-title">Header & Weekly Target</div>
+            <div class="form-group">
+              <label class="form-label">Overlay Main Title</label>
+              <input type="text" id="weeklyTitleInput" class="form-input" value="WEEKLY RUN RECAP" placeholder="e.g. WEEK 42 MARATHON BLOCK">
+            </div>
+
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="form-label">Date Range / Subtitle</label>
+                <input type="text" id="weeklySubtitleInput" class="form-input" placeholder="Auto calculated if empty">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Target Distance (<span id="weeklyTargetUnit">KM</span>)</label>
+                <input type="number" id="weeklyTargetDistanceInput" class="form-input" placeholder="e.g. 50" min="0" step="1">
+              </div>
+            </div>
+          </div>
+
+          <!-- METRICS VISIBILITY TOGGLES -->
+          <div class="section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <div class="section-title" style="margin-bottom: 0;">Visible Weekly Metrics</div>
+              <div style="display: flex; gap: 6px;">
+                <button type="button" id="weeklySelectAllMetricsBtn" class="btn btn-secondary" style="padding: 2px 7px; font-size: 0.7rem;" title="Select All Metrics">All</button>
+                <button type="button" id="weeklyDeselectAllMetricsBtn" class="btn btn-secondary" style="padding: 2px 7px; font-size: 0.7rem;" title="Deselect All Metrics">None</button>
+              </div>
+            </div>
+
+            <div style="font-size: 0.75rem; font-weight: 600; color: var(--accent-volt); text-transform: uppercase; letter-spacing: 0.5px; margin: 8px 0 6px 2px;">
+              Overall Headers & Summary Metrics
+            </div>
+            <div class="weekly-metric-grid">
+              <label><input type="checkbox" id="weeklyToggleTitle" checked> Main Title</label>
+              <label><input type="checkbox" id="weeklyToggleSubtitle" checked> Subtitle / Date</label>
+              <label><input type="checkbox" id="weeklyToggleTag" checked> Header Tag / Category</label>
+              <label><input type="checkbox" id="weeklyToggleDist" checked> Total Distance</label>
+              <label><input type="checkbox" id="weeklyToggleTime" checked> Total Duration</label>
+              <label><input type="checkbox" id="weeklyTogglePace" checked> Average Pace</label>
+              <label><input type="checkbox" id="weeklyToggleHr" checked> Average Heart Rate</label>
+              <label><input type="checkbox" id="weeklyToggleElev" checked> Total Elevation</label>
+              <label><input type="checkbox" id="weeklyToggleCalories" checked> Total Calories</label>
+              <label><input type="checkbox" id="weeklyToggleCount" checked> Session Count</label>
+              <label><input type="checkbox" id="weeklyToggleDailyBars" checked> Mon-Sun Volume Bars</label>
+            </div>
+
+            <div style="font-size: 0.75rem; font-weight: 600; color: var(--accent-cyan, #00f0ff); text-transform: uppercase; letter-spacing: 0.5px; margin: 14px 0 6px 2px;">
+              Individual Workout Sessions / Cards
+            </div>
+            <div class="weekly-metric-grid">
+              <label><input type="checkbox" id="weeklyToggleSessionDist" checked> Session Distance</label>
+              <label><input type="checkbox" id="weeklyToggleSessionTime" checked> Session Duration</label>
+              <label><input type="checkbox" id="weeklyToggleSessionPace" checked> Session Pace</label>
+              <label><input type="checkbox" id="weeklyToggleSessionHr" checked> Session Heart Rate</label>
+              <label><input type="checkbox" id="weeklyToggleSessionElev" checked> Session Elevation</label>
+              <label><input type="checkbox" id="weeklyToggleRouteMaps" checked> Route Silhouettes</label>
+              <label><input type="checkbox" id="weeklyToggleRunList" checked> Show Sessions Section</label>
+            </div>
+          </div>
+
+          <!-- DAILY VOLUME BARS STYLING -->
+          <div class="section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <div class="section-title" style="margin-bottom: 0;">📊 Daily Volume Bars Styling</div>
+              <button type="button" id="weeklyResetBarColorsBtn" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.72rem;" title="Reset bar colors">↺ Reset Colors</button>
+            </div>
+            <div style="font-size: 0.73rem; color: var(--text-muted); margin-bottom: 10px;">
+              Customize bar fill colors, gradients, and styling. Heights are mathematically true to actual distance ran.
+            </div>
+
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="form-label">Bar Color (Top / Solid)</label>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <input type="color" id="weeklyBarColor" value="#ccff00" style="width: 38px; height: 34px; padding: 2px; border: 1px solid var(--border-subtle); border-radius: 4px; background: transparent; cursor: pointer;">
+                  <input type="text" id="weeklyBarColorHex" class="form-input" placeholder="#ccff00" style="font-family: monospace; font-size: 0.8rem;">
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Gradient End Color</label>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <input type="color" id="weeklyBarColorEnd" value="#00f0ff" style="width: 38px; height: 34px; padding: 2px; border: 1px solid var(--border-subtle); border-radius: 4px; background: transparent; cursor: pointer;">
+                  <input type="text" id="weeklyBarColorEndHex" class="form-input" placeholder="#00f0ff" style="font-family: monospace; font-size: 0.8rem;">
+                </div>
+              </div>
+            </div>
+
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="form-label">Bar Fill Style</label>
+                <select id="weeklyBarStyleSelect" class="form-select">
+                  <option value="gradient" selected>Vertical Gradient</option>
+                  <option value="solid">Solid Fill</option>
+                  <option value="outline">Glowing Outline</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Quick Color Presets</label>
+                <div style="display: flex; gap: 4px; margin-top: 4px;">
+                  <button type="button" class="btn btn-secondary weekly-bar-preset-btn" data-c1="#ccff00" data-c2="#10b981" style="padding: 4px 6px; font-size: 0.7rem; color: #ccff00;" title="Volt & Emerald">Volt</button>
+                  <button type="button" class="btn btn-secondary weekly-bar-preset-btn" data-c1="#00f0ff" data-c2="#0066ff" style="padding: 4px 6px; font-size: 0.7rem; color: #00f0ff;" title="Neon Cyan">Cyan</button>
+                  <button type="button" class="btn btn-secondary weekly-bar-preset-btn" data-c1="#ff3366" data-c2="#ff9900" style="padding: 4px 6px; font-size: 0.7rem; color: #ff3366;" title="Hot Coral">Coral</button>
+                  <button type="button" class="btn btn-secondary weekly-bar-preset-btn" data-c1="#a855f7" data-c2="#ec4899" style="padding: 4px 6px; font-size: 0.7rem; color: #a855f7;" title="Electric Purple">Violet</button>
+                  <button type="button" class="btn btn-secondary weekly-bar-preset-btn" data-c1="#ffffff" data-c2="#888888" style="padding: 4px 6px; font-size: 0.7rem; color: #ffffff;" title="Monochrome White">White</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- INDIVIDUAL TEXTS & TYPOGRAPHY CUSTOMIZER -->
+          <div class="section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <div class="section-title" style="margin-bottom: 0;">🎨 Customize Individual Texts</div>
+              <button type="button" id="weeklyResetAllTextsBtn" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.72rem;" title="Reset all texts to default">↺ Reset All</button>
+            </div>
+            <div style="font-size: 0.73rem; color: var(--text-muted); margin-bottom: 8px;">
+              Customize font, weight, spacing, size, color, XY axes offsets, shadow, and outline for any text.
+            </div>
+            <div style="background: rgba(0, 240, 255, 0.08); border: 1px dashed rgba(0, 240, 255, 0.35); border-radius: 6px; padding: 7px 10px; margin-bottom: 12px; font-size: 0.72rem; color: #00f0ff; display: flex; align-items: center; gap: 8px;">
+              <span>🖱️ <b>Interactive Canvas Selection:</b> Click any text directly on the canvas to select &amp; drag to reposition!</span>
+            </div>
+
+            <!-- Target Text Element Selector -->
+            <div class="form-group">
+              <label class="form-label">Target Text Element</label>
+              <select id="weeklyTextTargetSelect" class="form-select" style="font-weight: 600;">
+                <optgroup label="Header & Titles">
+                  <option value="weeklyTitle">Overlay Main Title</option>
+                  <option value="weeklyTag">Top Badge / Pill Tag</option>
+                  <option value="weeklySubtitle">Date Range / Subtitle</option>
+                  <option value="goalText">Target Goal Text</option>
+                </optgroup>
+                <optgroup label="Consolidated Metrics">
+                  <option value="distLabel">Total Distance Label</option>
+                  <option value="distValue">Total Distance Value</option>
+                  <option value="distUnit">Distance Unit (KM/MI)</option>
+                  <option value="timeLabel">Duration Label</option>
+                  <option value="timeValue">Duration Value</option>
+                  <option value="paceLabel">Avg Pace Label</option>
+                  <option value="paceValue">Avg Pace Value</option>
+                  <option value="hrLabel">Avg Heart Rate Label</option>
+                  <option value="hrValue">Avg Heart Rate Value</option>
+                  <option value="elevLabel">Total Elevation Label</option>
+                  <option value="elevValue">Total Elevation Value</option>
+                  <option value="calLabel">Total Calories Label</option>
+                  <option value="calValue">Total Calories Value</option>
+                  <option value="countLabel">Sessions Count Label</option>
+                  <option value="countValue">Sessions Count Value</option>
+                </optgroup>
+                <optgroup label="Charts & Workout Sessions">
+                  <option value="dailyBarsTitle">Daily Volume Section Header</option>
+                  <option value="dailyDayLabels">Day of Week Labels (Mon–Sun)</option>
+                  <option value="dailyDayValues">Daily Volume Bar Values</option>
+                  <option value="runListTitle">Run List Header</option>
+                  <option value="runCardTitle">Run Card Titles / Names</option>
+                  <option value="runCardDate">Run Card Day / Date Chips</option>
+                  <option value="runCardStats">Run Card Telemetry Stats</option>
+                </optgroup>
+              </select>
+            </div>
+
+            <!-- Text Content Override -->
+            <div class="form-group">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <label class="form-label" style="margin-bottom: 0;">Text String Override (Optional)</label>
+                <button type="button" id="weeklyResetCurrentTextBtn" class="btn btn-secondary" style="padding: 2px 6px; font-size: 0.68rem;">↺ Reset This</button>
+              </div>
+              <input type="text" id="weeklyCustomTextInput" class="form-input" placeholder="Leave empty for auto generated text">
+            </div>
+
+            <!-- Font & Size -->
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="form-label">Font Family</label>
+                <select id="weeklyFontFamilySelect" class="form-select">
+                  <option value="default">Inherit Global Font</option>
+                  <option value="athletic">Athletic (Anton)</option>
+                  <option value="bebas">Bebas Neue</option>
+                  <option value="modern">Modern (Inter)</option>
+                  <option value="tech">Tech / Cyber (Rajdhani)</option>
+                  <option value="mono">Developer Mono (JetBrains)</option>
+                  <option value="serif">Editorial Serif (Playfair)</option>
+                  <option value="handwriting">Handwriting (Caveat)</option>
+                  <option value="oswald">Oswald Bold</option>
+                  <option value="montserrat">Montserrat</option>
+                  <option value="teko">Teko Condensed</option>
+                  <option value="orbitron">Orbitron Futuristic</option>
+                  <option value="russo">Russo One</option>
+                  <option value="cinzel">Cinzel Classical</option>
+                  <option value="righteous">Righteous Retro</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <div style="display: flex; justify-content: space-between;">
+                  <label class="form-label">Size Scale</label>
+                  <span id="weeklyFontSizeScaleVal" style="font-size: 0.75rem; color: var(--accent-volt);">1.0x</span>
+                </div>
+                <input type="range" id="weeklyFontSizeScale" min="0.5" max="2.5" step="0.05" value="1.0" class="form-range">
+              </div>
+            </div>
+
+            <!-- Typography: Weight & Letter Spacing -->
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="form-label">Font Weight</label>
+                <select id="weeklyFontWeightSelect" class="form-select">
+                  <option value="normal">Normal (400)</option>
+                  <option value="500">Medium (500)</option>
+                  <option value="600">Semi-Bold (600)</option>
+                  <option value="bold" selected>Bold (700)</option>
+                  <option value="800">Extra Bold (800)</option>
+                  <option value="900">Black (900)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <div style="display: flex; justify-content: space-between;">
+                  <label class="form-label">Letter Spacing</label>
+                  <span id="weeklyTextLetterSpacingVal" style="font-size: 0.75rem; color: var(--accent-volt);">0px</span>
+                </div>
+                <input type="range" id="weeklyTextLetterSpacing" min="-2" max="20" step="0.5" value="0" class="form-range">
+              </div>
+            </div>
+
+            <!-- Typography: Transform & Alignment -->
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="form-label">Text Transform</label>
+                <select id="weeklyTextTransformSelect" class="form-select">
+                  <option value="none">None (As typed)</option>
+                  <option value="uppercase">UPPERCASE</option>
+                  <option value="lowercase">lowercase</option>
+                  <option value="capitalize">Capitalize Words</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Alignment</label>
+                <select id="weeklyTextAlignSelect" class="form-select">
+                  <option value="default">Default</option>
+                  <option value="left">Left</option>
+                  <option value="center">Center</option>
+                  <option value="right">Right</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Typography: Opacity & Rotation -->
+            <div class="grid-2">
+              <div class="form-group">
+                <div style="display: flex; justify-content: space-between;">
+                  <label class="form-label">Text Opacity</label>
+                  <span id="weeklyTextOpacityVal" style="font-size: 0.75rem; color: var(--accent-volt);">1.0</span>
+                </div>
+                <input type="range" id="weeklyTextOpacity" min="0.1" max="1.0" step="0.05" value="1.0" class="form-range">
+              </div>
+              <div class="form-group">
+                <div style="display: flex; justify-content: space-between;">
+                  <label class="form-label">Rotation Angle</label>
+                  <span id="weeklyTextRotationVal" style="font-size: 0.75rem; color: var(--accent-volt);">0°</span>
+                </div>
+                <input type="range" id="weeklyTextRotation" min="-180" max="180" step="1" value="0" class="form-range">
+              </div>
+            </div>
+
+            <!-- Color & Quick Presets -->
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="form-label">Text Color</label>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <input type="color" id="weeklyTextColorPicker" value="#ffffff" style="width: 38px; height: 34px; padding: 2px; border: 1px solid var(--border-subtle); border-radius: 4px; background: transparent; cursor: pointer;">
+                  <input type="text" id="weeklyTextColorHex" class="form-input" placeholder="#ffffff" style="font-family: monospace; font-size: 0.8rem;">
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Quick Color Preset</label>
+                <div style="display: flex; gap: 4px; margin-top: 4px;">
+                  <button type="button" class="btn btn-secondary weekly-color-chip" data-color="" style="padding: 4px 6px; font-size: 0.7rem;" title="Default Color">Auto</button>
+                  <button type="button" class="btn btn-secondary weekly-color-chip" data-color="#ccff00" style="padding: 4px 6px; font-size: 0.7rem; color: #ccff00;" title="Volt">Volt</button>
+                  <button type="button" class="btn btn-secondary weekly-color-chip" data-color="#00f0ff" style="padding: 4px 6px; font-size: 0.7rem; color: #00f0ff;" title="Neon">Cyan</button>
+                  <button type="button" class="btn btn-secondary weekly-color-chip" data-color="#ff3366" style="padding: 4px 6px; font-size: 0.7rem; color: #ff3366;" title="Coral">Coral</button>
+                  <button type="button" class="btn btn-secondary weekly-color-chip" data-color="#ffffff" style="padding: 4px 6px; font-size: 0.7rem; color: #ffffff;" title="White">White</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- XY Axes Adjustment (Nudge) -->
+            <div class="grid-2">
+              <div class="form-group">
+                <div style="display: flex; justify-content: space-between;">
+                  <label class="form-label">X Axis Offset</label>
+                  <span id="weeklyTextOffsetXVal" style="font-size: 0.75rem; color: var(--accent-volt);">0px</span>
+                </div>
+                <input type="range" id="weeklyTextOffsetX" min="-120" max="120" step="1" value="0" class="form-range">
+              </div>
+              <div class="form-group">
+                <div style="display: flex; justify-content: space-between;">
+                  <label class="form-label">Y Axis Offset</label>
+                  <span id="weeklyTextOffsetYVal" style="font-size: 0.75rem; color: var(--accent-volt);">0px</span>
+                </div>
+                <input type="range" id="weeklyTextOffsetY" min="-120" max="120" step="1" value="0" class="form-range">
+              </div>
+            </div>
+
+            <!-- Shadow & Outline Controls -->
+            <div style="background: var(--bg-card); padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); margin-top: 4px;">
+              <!-- Shadow row -->
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <label style="font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input type="checkbox" id="weeklyTextShadowToggle"> Text Shadow
+                </label>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <input type="color" id="weeklyTextShadowColor" value="#000000" style="width: 24px; height: 24px; border: none; background: transparent; cursor: pointer;" title="Shadow Color">
+                  <input type="range" id="weeklyTextShadowBlur" min="0" max="30" step="1" value="8" style="width: 70px;" title="Shadow Blur">
+                  <span id="weeklyTextShadowBlurVal" style="font-size: 0.7rem; color: var(--text-muted); width: 28px;">8px</span>
+                </div>
+              </div>
+              <!-- Outline row -->
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <label style="font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input type="checkbox" id="weeklyTextOutlineToggle"> Text Outline
+                </label>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <input type="color" id="weeklyTextOutlineColor" value="#000000" style="width: 24px; height: 24px; border: none; background: transparent; cursor: pointer;" title="Outline Color">
+                  <input type="range" id="weeklyTextOutlineWidth" min="1" max="10" step="0.5" value="2.5" style="width: 70px;" title="Outline Width">
+                  <span id="weeklyTextOutlineWidthVal" style="font-size: 0.7rem; color: var(--text-muted); width: 28px;">2.5px</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Background Badge / Pill Controls -->
+            <div style="background: var(--bg-card); padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); margin-top: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <label style="font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input type="checkbox" id="weeklyTextBadgeToggle"> Background Badge / Pill
+                </label>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <input type="color" id="weeklyTextBadgeColor" value="#000000" style="width: 24px; height: 24px; border: none; background: transparent; cursor: pointer;" title="Badge Color">
+                  <input type="range" id="weeklyTextBadgeOpacity" min="0.1" max="1.0" step="0.05" value="0.65" style="width: 70px;" title="Badge Opacity">
+                  <span id="weeklyTextBadgeOpacityVal" style="font-size: 0.7rem; color: var(--text-muted); width: 28px;">65%</span>
+                </div>
+              </div>
+              <div style="display: flex; gap: 10px; align-items: center;">
+                <div style="flex: 1; display: flex; align-items: center; gap: 6px;">
+                  <span style="font-size: 0.7rem; color: var(--text-muted);">Pad:</span>
+                  <input type="range" id="weeklyTextBadgePadding" min="2" max="24" step="1" value="6" style="flex: 1;" title="Badge Padding">
+                  <span id="weeklyTextBadgePaddingVal" style="font-size: 0.7rem; color: var(--text-muted); width: 26px;">6px</span>
+                </div>
+                <div style="flex: 1; display: flex; align-items: center; gap: 6px;">
+                  <span style="font-size: 0.7rem; color: var(--text-muted);">Rad:</span>
+                  <input type="range" id="weeklyTextBadgeRadius" min="0" max="24" step="1" value="4" style="flex: 1;" title="Badge Radius">
+                  <span id="weeklyTextBadgeRadiusVal" style="font-size: 0.7rem; color: var(--text-muted); width: 26px;">4px</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SAVE & LOAD TEMPLATE PRESETS -->
+          <div class="section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <div class="section-title" style="margin-bottom: 0;">💾 Save &amp; Load Template Presets</div>
+              <button type="button" id="weeklyRestoreDraftBtn" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.72rem;" title="Restore auto-saved draft">↺ Restore Draft</button>
+            </div>
+            <div style="font-size: 0.73rem; color: var(--text-muted); margin-bottom: 10px;">
+              Save your template choices, customized texts, bar colors, and layouts as named presets or export/import JSON files.
+            </div>
+
+            <!-- Save Preset Input -->
+            <div class="form-group">
+              <label class="form-label">Save Current Progress</label>
+              <div style="display: flex; gap: 6px;">
+                <input type="text" id="weeklyPresetNameInput" class="form-input" placeholder="e.g. Neon Racing Digest" style="font-size: 0.8rem;">
+                <button type="button" id="weeklySavePresetBtn" class="btn btn-primary" style="padding: 6px 14px; font-size: 0.75rem; white-space: nowrap;">💾 Save</button>
+              </div>
+            </div>
+
+            <!-- Saved Presets Selector -->
+            <div class="form-group" style="margin-bottom: 8px;">
+              <label class="form-label">Saved Presets</label>
+              <div style="display: flex; gap: 6px;">
+                <select id="weeklySavedPresetsSelect" class="form-select" style="font-size: 0.8rem;">
+                  <option value="">-- Select Saved Preset --</option>
+                </select>
+                <button type="button" id="weeklyLoadPresetBtn" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.75rem; white-space: nowrap;">📂 Load</button>
+                <button type="button" id="weeklyDeletePresetBtn" class="btn btn-secondary" style="padding: 6px 10px; font-size: 0.75rem; color: #ff4d4f;" title="Delete Preset">🗑️</button>
+              </div>
+            </div>
+
+            <!-- Export / Import JSON -->
+            <div style="display: flex; gap: 8px; margin-top: 10px;">
+              <button type="button" id="weeklyExportPresetBtn" class="btn btn-secondary" style="flex: 1; padding: 6px 10px; font-size: 0.74rem;">📥 Export JSON</button>
+              <button type="button" id="weeklyImportPresetBtn" class="btn btn-secondary" style="flex: 1; padding: 6px 10px; font-size: 0.74rem;">📤 Import JSON</button>
+              <input type="file" id="weeklyImportPresetFile" accept=".json" style="display: none;">
+            </div>
+          </div>
+
+          <!-- MANAGE & RENAME SESSIONS -->
+          <div class="section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <div class="section-title" style="margin-bottom: 0;">
+                Loaded Runs (<span id="weeklyRunsCount">0</span>)
+              </div>
+              <span style="font-size: 0.72rem; color: var(--text-muted);">Rename or toggle runs</span>
+            </div>
+
+            <div id="weeklyRunsListContainer" class="weekly-runs-container">
+              <div style="text-align: center; padding: 24px 8px; color: var(--text-muted); font-size: 0.8rem;">
+                No runs loaded. Upload a .ZIP of .FIT files or click "⚡ Load Demo Week" above.
+              </div>
             </div>
           </div>
         </div>
@@ -893,6 +1361,58 @@
               </select>
             </div>
 
+            <!-- Animation Runner Marker Controls -->
+            <div class="form-group" style="padding: 10px 12px; background: rgba(255,255,255,0.025); border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 12px;">
+              <label class="form-label" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span>🎯 Map Animation Marker</span>
+                <span id="mapMarkerStyleBadge" style="font-size: 0.7rem; color: var(--accent); font-family: monospace; background: rgba(0, 240, 255, 0.08); padding: 1px 6px; border-radius: 4px; border: 1px solid rgba(0, 240, 255, 0.2);">corsair</span>
+              </label>
+              <select id="mapMarkerStyleSelect" class="form-select">
+                <option value="corsair" selected>🎯 Corsair / Tactical Crosshair</option>
+                <option value="dot">🔵 Glowing Pulse Dot</option>
+                <option value="chevron">🧭 Directional Arrow (Heading)</option>
+                <option value="pulse-ring">📡 Sonar / Pulse Ripple Rings</option>
+                <option value="target">🎯 Bullseye Precision Reticle</option>
+                <option value="diamond">💠 Cyber Diamond HUD</option>
+                <option value="pin">📍 Modern GPS Map Pin</option>
+                <option value="minimal-dot">⚫ Crisp Minimal Dot</option>
+              </select>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
+                <div>
+                  <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-muted); margin-bottom: 3px;">
+                    <span>Size</span>
+                    <span id="mapMarkerSizeVal">14px</span>
+                  </div>
+                  <input type="range" id="mapMarkerSizeSlider" min="8" max="32" value="14" step="1" class="form-range">
+                </div>
+                <div>
+                  <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 3px;">Custom Color</div>
+                  <div style="display: flex; gap: 4px; align-items: center;">
+                    <input type="color" id="mapMarkerColorInput" value="#00f0ff" style="width: 34px; height: 26px; border: 1px solid var(--border-color); border-radius: 4px; background: transparent; cursor: pointer; padding: 1px;">
+                    <button type="button" id="mapMarkerColorResetBtn" class="btn btn-secondary" style="padding: 2px 6px; font-size: 0.68rem;" title="Reset to Accent">Auto</button>
+                  </div>
+                </div>
+              </div>
+
+              <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 6px;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <span style="font-size: 0.74rem; color: var(--text-normal);">Pulse Radar Wave</span>
+                  <label class="switch" style="transform: scale(0.8); margin-bottom: 0;">
+                    <input type="checkbox" id="mapMarkerPulseToggle" checked>
+                    <span class="slider"></span>
+                  </label>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <span style="font-size: 0.74rem; color: var(--text-normal);">Show Marker on Static Map</span>
+                  <label class="switch" style="transform: scale(0.8); margin-bottom: 0;">
+                    <input type="checkbox" id="mapMarkerStaticToggle" checked>
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
             <div class="form-group">
               <label class="form-label">Hero Metric Display Style</label>
               <select id="heroDesignSelect" class="form-select">
@@ -918,6 +1438,7 @@
                 <option value="angled-speed-slash">Dynamic Speed Slash (Athletic Slanted Gradient)</option>
                 <option value="kinetic-bold-slash">Kinetic Racing Split (45° High-Contrast Slanted Plate)</option>
                 <option value="neon-pulse-ring">Neon Pulse Halo (Radial Orbit Ring & Center Focal Stat)</option>
+                <option value="magazine-headline">Magazine Headline (Bold cover layout)</option>
               </select>
             </div>
 
@@ -1203,6 +1724,30 @@
                 <input type="range" id="widgetHeightSlider" class="form-slider" min="30" max="800" value="120">
               </div>
             </div>
+
+            <!-- Widget Rotation Degree Slider & Input -->
+            <div class="form-group" style="margin-top: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                <label class="form-label" style="margin-bottom: 0;">Rotation Degree (<span id="widgetRotationVal">0°</span>):</label>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <input type="number" id="widgetRotationInput" class="form-input" min="-180" max="180" step="1" value="0" style="width: 58px; padding: 2px 4px; font-size: 0.75rem; text-align: right;">
+                  <span style="font-size: 0.72rem; color: var(--text-muted);">°</span>
+                  <button type="button" id="resetWidgetRotationBtn" class="btn btn-secondary" style="padding: 1px 6px; font-size: 0.68rem;" title="Reset rotation to 0°">0°</button>
+                </div>
+              </div>
+              <input type="range" id="widgetRotationSlider" class="form-slider" min="-180" max="180" step="1" value="0">
+              <div style="display: flex; justify-content: space-between; font-size: 0.65rem; color: var(--text-muted); margin-top: 2px;">
+                <span>-180°</span>
+                <div style="display: flex; gap: 4px;">
+                  <button type="button" class="btn btn-secondary widget-rot-preset" data-rot="-45" style="padding: 0 4px; font-size: 0.65rem;">-45°</button>
+                  <button type="button" class="btn btn-secondary widget-rot-preset" data-rot="0" style="padding: 0 4px; font-size: 0.65rem;">0°</button>
+                  <button type="button" class="btn btn-secondary widget-rot-preset" data-rot="45" style="padding: 0 4px; font-size: 0.65rem;">+45°</button>
+                  <button type="button" class="btn btn-secondary widget-rot-preset" data-rot="90" style="padding: 0 4px; font-size: 0.65rem;">+90°</button>
+                </div>
+                <span>+180°</span>
+              </div>
+            </div>
+
             <button id="centerSelectedWidgetBtn" class="btn btn-secondary" style="width: 100%; margin-top: 6px;">
               ↔ Center Widget Horizontally
             </button>
@@ -1550,9 +2095,65 @@
               </div>
 
               <!-- Direct Text Edit Input for this sub-element -->
-              <div class="form-group" id="inspectorSubElemTextGroup" style="margin-bottom: 4px;">
+              <div class="form-group" id="inspectorSubElemTextGroup" style="margin-bottom: 6px;">
                 <label class="form-label" style="font-size: 0.72rem;">Edit Text for this Item:</label>
                 <input type="text" id="inspectorSubElemTextInput" class="form-input" placeholder="Custom text override...">
+              </div>
+
+              <!-- Sub-Element Rotation Angle -->
+              <div class="form-group" style="margin-bottom: 6px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                  <label class="form-label" style="margin-bottom: 0; font-size: 0.72rem;">Item Rotation Angle:</label>
+                  <div style="display: flex; align-items: center; gap: 4px;">
+                    <input type="number" id="inspectorSubElemRotationInput" class="form-input" min="-180" max="180" step="1" value="0" style="width: 50px; padding: 1px 4px; font-size: 0.72rem; text-align: right;">
+                    <span style="font-size: 0.7rem; color: var(--text-muted);">°</span>
+                    <button type="button" id="inspectorSubElemResetRotBtn" class="btn btn-secondary" style="padding: 1px 5px; font-size: 0.65rem;" title="Reset rotation">0°</button>
+                  </div>
+                </div>
+                <input type="range" id="inspectorSubElemRotationSlider" class="form-slider" min="-180" max="180" step="1" value="0">
+              </div>
+
+              <!-- Sub-Element Text Shadow & Outline Box -->
+              <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 8px; margin-bottom: 6px;">
+                <div style="font-size: 0.72rem; font-weight: 700; color: var(--accent-volt); margin-bottom: 6px; display: flex; justify-content: space-between;">
+                  <span>✨ Item Shadow & Outline</span>
+                </div>
+                <!-- Shadow Toggle -->
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                  <label style="display: flex; align-items: center; gap: 6px; font-size: 0.72rem; cursor: pointer; color: var(--text-normal);">
+                    <input type="checkbox" id="inspectorSubElemShadowToggle">
+                    <span>Enable Shadow</span>
+                  </label>
+                  <input type="color" id="inspectorSubElemShadowColorInput" class="form-color-picker" value="#000000" style="width: 28px; height: 22px; padding: 1px;">
+                </div>
+                <div id="inspectorSubElemShadowDetails" style="display: none; margin-bottom: 6px;">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+                    <div>
+                      <span style="font-size: 0.65rem; color: var(--text-muted);">Blur (px):</span>
+                      <input type="range" id="inspectorSubElemShadowBlurSlider" class="form-slider" min="0" max="30" step="1" value="8">
+                    </div>
+                    <div>
+                      <span style="font-size: 0.65rem; color: var(--text-muted);">Offset Y:</span>
+                      <input type="range" id="inspectorSubElemShadowOffsetYSlider" class="form-slider" min="-20" max="20" step="1" value="3">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Outline Toggle -->
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px;">
+                  <label style="display: flex; align-items: center; gap: 6px; font-size: 0.72rem; cursor: pointer; color: var(--text-normal);">
+                    <input type="checkbox" id="inspectorSubElemOutlineToggle">
+                    <span>Enable Outline / Stroke</span>
+                  </label>
+                  <input type="color" id="inspectorSubElemOutlineColorInput" class="form-color-picker" value="#000000" style="width: 28px; height: 22px; padding: 1px;">
+                </div>
+                <div id="inspectorSubElemOutlineDetails" style="display: none; margin-top: 4px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 0.65rem; color: var(--text-muted);">Stroke Width:</span>
+                    <span id="inspectorSubElemOutlineWidthVal" style="font-size: 0.68rem; color: var(--accent-volt); font-weight: 600;">2px</span>
+                  </div>
+                  <input type="range" id="inspectorSubElemOutlineWidthSlider" class="form-slider" min="0.5" max="12" step="0.5" value="2">
+                </div>
               </div>
             </div>
 
@@ -1668,6 +2269,80 @@
             <div class="form-group">
               <label class="form-label">Element Opacity: <span id="inspectorOpacityVal" style="color:var(--accent-volt); font-weight:700;">100%</span></label>
               <input type="range" id="inspectorOpacitySlider" class="form-slider" min="20" max="100" step="5" value="100">
+            </div>
+
+            <!-- Widget Rotation Degree in Inspector -->
+            <div class="form-group" id="inspectorWidgetRotationGroup">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                <label class="form-label" style="margin-bottom: 0;">Widget Rotation Degree:</label>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <input type="number" id="inspectorWidgetRotationInput" class="form-input" min="-180" max="180" step="1" value="0" style="width: 58px; padding: 2px 4px; font-size: 0.75rem; text-align: right;">
+                  <span style="font-size: 0.72rem; color: var(--text-muted);">°</span>
+                  <button type="button" id="inspectorResetWidgetRotationBtn" class="btn btn-secondary" style="padding: 1px 6px; font-size: 0.68rem;" title="Reset rotation to 0°">0°</button>
+                </div>
+              </div>
+              <input type="range" id="inspectorWidgetRotationSlider" class="form-slider" min="-180" max="180" step="1" value="0">
+              <div style="display: flex; justify-content: space-between; font-size: 0.65rem; color: var(--text-muted); margin-top: 2px;">
+                <span>-180°</span>
+                <span id="inspectorWidgetRotationVal" style="color: var(--accent-volt); font-weight: 600;">0°</span>
+                <span>+180°</span>
+              </div>
+            </div>
+
+            <!-- Widget Text Shadow & Outline Controls -->
+            <div class="form-group" style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 10px;">
+              <div style="font-size: 0.75rem; font-weight: 700; color: var(--accent-volt); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                <span>✨ Text Shadow & Outline (All Text in Widget)</span>
+              </div>
+
+              <!-- Text Shadow -->
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.74rem; cursor: pointer; color: var(--text-normal);">
+                  <input type="checkbox" id="inspectorTextShadowToggle">
+                  <span>Enable Text Shadow</span>
+                </label>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <input type="color" id="inspectorTextShadowColorInput" value="#000000" style="width: 32px; height: 24px; padding: 1px; border: none; border-radius: 4px; cursor: pointer;">
+                  <input type="text" id="inspectorTextShadowColorHex" class="form-input" placeholder="#000000" style="width: 70px; padding: 1px 4px; font-size: 0.72rem; font-family: monospace;">
+                </div>
+              </div>
+              <div id="inspectorTextShadowDetails" style="display: none; margin-bottom: 10px; border-left: 2px solid var(--border-subtle); padding-left: 8px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                  <div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--text-muted);">
+                      <span>Blur:</span>
+                      <span id="inspectorTextShadowBlurVal">8px</span>
+                    </div>
+                    <input type="range" id="inspectorTextShadowBlurSlider" class="form-slider" min="0" max="40" step="1" value="8">
+                  </div>
+                  <div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--text-muted);">
+                      <span>Offset Y:</span>
+                      <span id="inspectorTextShadowOffsetYVal">3px</span>
+                    </div>
+                    <input type="range" id="inspectorTextShadowOffsetYSlider" class="form-slider" min="-25" max="25" step="1" value="3">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Text Outline / Stroke -->
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px;">
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.74rem; cursor: pointer; color: var(--text-normal);">
+                  <input type="checkbox" id="inspectorTextOutlineToggle">
+                  <span>Enable Text Outline / Stroke</span>
+                </label>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <input type="color" id="inspectorTextOutlineColorInput" value="#000000" style="width: 32px; height: 24px; padding: 1px; border: none; border-radius: 4px; cursor: pointer;">
+                  <input type="text" id="inspectorTextOutlineColorHex" class="form-input" placeholder="#000000" style="width: 70px; padding: 1px 4px; font-size: 0.72rem; font-family: monospace;">
+                </div>
+              </div>
+              <div id="inspectorTextOutlineDetails" style="display: none; margin-top: 6px; border-left: 2px solid var(--border-subtle); padding-left: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.68rem; color: var(--text-muted);">
+                  <span>Outline Width:</span>
+                  <span id="inspectorTextOutlineWidthVal" style="color: var(--accent-volt); font-weight: 600;">2px</span>
+                </div>
+                <input type="range" id="inspectorTextOutlineWidthSlider" class="form-slider" min="0.5" max="16" step="0.5" value="2">
+              </div>
             </div>
 
             <!-- Individual Text & Label Customizer for Current Element -->
@@ -2410,6 +3085,20 @@
             </div>
           </div>
 
+          <div style="margin-bottom: 14px;">
+            <label class="form-label">Map Animation Marker</label>
+            <select id="modalMapMarkerStyleSelect" class="form-input">
+              <option value="corsair" selected>🎯 Corsair / Tactical Crosshair</option>
+              <option value="dot">🔵 Glowing Pulse Dot</option>
+              <option value="chevron">🧭 Directional Arrow (Heading)</option>
+              <option value="pulse-ring">📡 Sonar / Pulse Ripple Rings</option>
+              <option value="target">🎯 Bullseye Precision Reticle</option>
+              <option value="diamond">💠 Cyber Diamond HUD</option>
+              <option value="pin">📍 Modern GPS Map Pin</option>
+              <option value="minimal-dot">⚫ Crisp Minimal Dot</option>
+            </select>
+          </div>
+
           <div style="margin-bottom: 16px;">
             <label class="form-label">Format / Codec</label>
             <select id="modalVideoCodecSelect" class="form-input">
@@ -2463,6 +3152,7 @@
   <!-- Hidden Canvas for full-resolution multi-scale exports -->
   <canvas id="exportCanvas" style="display: none;"></canvas>
 
+  <script src="js/vendor/jszip.min.js"></script>
   <script type="module" src="js/app.js"></script>
 </body>
 </html>

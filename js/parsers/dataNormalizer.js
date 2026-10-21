@@ -176,6 +176,7 @@ export function normalizeActivity(rawData, isImperial = false, splitDistanceMete
     dateFormatted,
     timeFormatted,
     startDate,
+    date: startDate,
     distance: rawData.distance,
     distanceMain,
     distanceUnit,
