@@ -10605,8 +10605,9 @@ export class OverlayRenderer {
       let boxW = item.width || (textW + padX * 2);
       let boxH = item.height || (textH + padY * 2);
 
-      let x = item.x !== undefined ? item.x : (w - boxW) / 2;
-      let y = item.y !== undefined ? item.y : (h - boxH) / 2;
+      const wp = (this.config && this.config.widgetPositions && this.config.widgetPositions[item.id]) || (this.config?.widgetPositions?.[item.id]);
+      let x = item.x !== undefined ? item.x : ((wp && wp.x !== undefined) ? wp.x : (w - boxW) / 2);
+      let y = item.y !== undefined ? item.y : ((wp && wp.y !== undefined) ? wp.y : (h - boxH) / 2);
 
       // Rotation around item center
       const itemRot = typeof item.rotation === 'number' ? item.rotation : 0;

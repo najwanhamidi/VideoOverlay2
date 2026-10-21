@@ -870,7 +870,10 @@
 
               <div class="section-title" style="margin-bottom: 0;">🎨 Customize Individual Texts</div>
 
-              <button type="button" id="weeklyResetAllTextsBtn" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.72rem;" title="Reset all texts to default">↺ Reset All</button>
+              <div style="display: flex; gap: 6px;">
+                <button type="button" id="weeklyDeleteCurrentTextBtn" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.72rem; color: #ff6666;" title="Delete currently selected text element">🗑️ Delete</button>
+                <button type="button" id="weeklyResetAllTextsBtn" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.72rem;" title="Reset all texts to default">↺ Reset All</button>
+              </div>
 
             </div>
 
@@ -895,6 +898,15 @@
               <button type="button" id="weeklyClearSelectionBtn" class="btn btn-secondary" style="font-size: 0.72rem; padding: 4px 8px;">
                 ✖️ Clear Selection
               </button>
+              <button type="button" id="weeklyDeleteSelectedBtn" class="btn btn-secondary" style="font-size: 0.72rem; padding: 4px 8px; color: #ff6666; border-color: rgba(255, 102, 102, 0.4);" title="Delete selected text or shape element(s) (or press Delete / Backspace key)">
+                🗑️ Delete Selected
+              </button>
+              <button type="button" id="weeklyRestoreAllBtn" class="btn btn-secondary" style="font-size: 0.72rem; padding: 4px 8px; color: #44ff88; border-color: rgba(68, 255, 136, 0.4);" title="Restore all deleted elements" disabled>
+                ♻️ Restore All (<span id="weeklyDeletedCountBadge">0</span>)
+              </button>
+              <select id="weeklyDeletedElementsSelect" class="form-select" style="font-size: 0.72rem; padding: 3px 6px; width: auto; max-width: 185px; display: inline-block;" disabled>
+                <option value="">♻️ Restore single...</option>
+              </select>
               <span id="weeklySelectionCountBadge" style="font-size: 0.72rem; font-weight: 700; color: var(--accent-volt); padding: 3px 7px; background: rgba(204, 255, 0, 0.12); border-radius: 4px; display: none;">0 items selected</span>
             </div>
 
@@ -1072,13 +1084,13 @@
 
                 <select id="weeklyFontWeightSelect" class="form-select">
 
-                  <option value="normal">Normal (400)</option>
+                  <option value="normal" selected>Normal (400)</option>
 
                   <option value="500">Medium (500)</option>
 
                   <option value="600">Semi-Bold (600)</option>
 
-                  <option value="bold" selected>Bold (700)</option>
+                  <option value="bold">Bold (700)</option>
 
                   <option value="800">Extra Bold (800)</option>
 
@@ -1427,6 +1439,20 @@
               <select id="weeklyCardTargetSelect" class="form-select" style="font-weight: 600;">
 
                 <option value="allCards">📦 All Cards / Panels (Global)</option>
+                <optgroup label="Shapes &amp; Non-Text Components">
+                  <option value="dailyBar_0">📊 Monday Volume Bar</option>
+                  <option value="dailyBar_1">📊 Tuesday Volume Bar</option>
+                  <option value="dailyBar_2">📊 Wednesday Volume Bar</option>
+                  <option value="dailyBar_3">📊 Thursday Volume Bar</option>
+                  <option value="dailyBar_4">📊 Friday Volume Bar</option>
+                  <option value="dailyBar_5">📊 Saturday Volume Bar</option>
+                  <option value="dailyBar_6">📊 Sunday Volume Bar</option>
+                  <option value="routeMap_0">🗺️ Run 1 Route Map</option>
+                  <option value="runProgressBar_0">📏 Run 1 Progress Bar</option>
+                  <option value="runBadge_0">🏷️ Run 1 Icon Badge</option>
+                  <option value="tagShape">🏷️ Header Tag Pill Shape</option>
+                  <option value="heroTargetPill">🎯 Target Goal Pill Shape</option>
+                </optgroup>
 
                 <optgroup label="Main Cards &amp; Panels">
 
