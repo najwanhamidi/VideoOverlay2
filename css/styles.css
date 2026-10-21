@@ -817,6 +817,39 @@ input:checked + .slider:before {
 .handle-sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
 .handle-w  { top: calc(50% - 6px); left: -6px; cursor: ew-resize; }
 
+/* Rotation Handle Stem & Knob */
+.gizmo-rot-stem {
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  width: 1.5px;
+  height: 24px;
+  background: var(--accent-volt, #ccff00);
+  pointer-events: none;
+  transform: translateX(-50%);
+  z-index: 21;
+}
+
+.handle-rot {
+  top: -30px;
+  left: calc(50% - 6px);
+  cursor: grab;
+  border-radius: 50% !important;
+  background: var(--accent-volt, #ccff00) !important;
+  border: 2px solid #000000 !important;
+  box-shadow: 0 0 8px rgba(204, 255, 0, 0.7);
+  width: 12px;
+  height: 12px;
+}
+
+.handle-rot:hover {
+  transform: scale(1.2);
+}
+
+.handle-rot:active {
+  cursor: grabbing;
+}
+
 /* Custom Texts & Stickers */
 .custom-text-item {
   background: rgba(255, 255, 255, 0.04);
@@ -1244,3 +1277,95 @@ input:checked + .slider:before {
 }
 
 
+
+/* Weekly & Batch Overlay Studio */
+.weekly-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 12px;
+  background: var(--bg-card);
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+}
+
+.weekly-metric-grid label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.weekly-metric-grid label:hover {
+  color: var(--text-primary);
+}
+
+.weekly-metric-grid input[type="checkbox"] {
+  accent-color: var(--accent-volt);
+  cursor: pointer;
+}
+
+.weekly-runs-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.weekly-run-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.weekly-run-item:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--bg-card-hover);
+}
+
+.weekly-run-item.disabled {
+  opacity: 0.45;
+}
+
+.weekly-run-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.weekly-run-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.weekly-run-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--accent-volt);
+}
+
+.weekly-run-stats {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.weekly-run-name-input {
+  width: 100%;
+  font-size: 0.8rem;
+  padding: 6px 8px;
+}
