@@ -2502,7 +2502,61 @@
 
 
 
-          <div class="section">
+          
+          <!-- SPLIT LINE SPACING & CROSS HORIZONTAL DIVIDERS (NEW USER REQUIREMENT) -->
+          <div class="section" id="splitRowDividersSection">
+            <div class="section-title">
+              <span>Split Rows Spacing &amp; Divider Lines</span>
+              <span id="splitSpacingBadge" style="font-size: 0.72rem; color: var(--accent-volt); font-weight: 600;">Default</span>
+            </div>
+            <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 8px;">
+              Adjust line spacing and cross horizontal lines between split rows (progress bars, table, ladder, cards, highlight):
+            </div>
+
+            <div class="form-group" style="margin-bottom: 8px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <label class="form-label" style="margin-bottom: 0;">Spacing Between Lines / Rows:</label>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <input type="number" id="splitRowSpacingInput" class="form-input" min="0" max="60" step="1" value="6" style="width: 56px; padding: 2px 6px; font-size: 0.75rem; text-align: right;">
+                  <span style="font-size: 0.72rem; color: var(--text-muted);">px</span>
+                </div>
+              </div>
+              <input type="range" id="splitRowSpacingSlider" class="form-slider" min="0" max="50" step="1" value="6">
+            </div>
+
+            <div class="toggle-item" style="margin-bottom: 8px;">
+              <div class="toggle-label-group">
+                <span class="toggle-icon">➖</span>
+                <div>
+                  <div class="toggle-text">Cross Horizontal Lines Between Splits</div>
+                  <div class="toggle-desc">Draw divider lines across split rows &amp; items</div>
+                </div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="splitShowDividersToggle" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <div id="splitDividerStyleControls" style="display: flex; gap: 8px; align-items: center;">
+              <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                <label class="form-label" style="font-size: 0.7rem; margin-bottom: 2px;">Divider Color &amp; Opacity:</label>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <input type="color" id="splitDividerColorInput" value="#38bdf8" style="width: 32px; height: 26px; border: none; border-radius: 4px; cursor: pointer;">
+                  <input type="text" id="splitDividerColorHex" class="form-input" value="rgba(255, 255, 255, 0.15)" style="flex: 1; font-size: 0.7rem; padding: 2px 6px;">
+                </div>
+              </div>
+              <div class="form-group" style="width: 100px; margin-bottom: 0;">
+                <label class="form-label" style="font-size: 0.7rem; margin-bottom: 2px;">Divider Style:</label>
+                <select id="splitDividerStyleSelect" class="form-select" style="font-size: 0.75rem; padding: 2px 6px;">
+                  <option value="solid" selected>Solid</option>
+                  <option value="dashed">Dashed</option>
+                  <option value="dotted">Dotted</option>
+                </select>
+              </div>
+            </div>
+          </div>
+<div class="section">
 
             <div class="section-title">
 
@@ -4663,6 +4717,80 @@
                 <input type="text" id="inspectorSubElemTextInput" class="form-input" placeholder="Custom text override...">
 
               </div>
+              <!-- Letter Spacing / Spacing (NEW) -->
+              <div class="form-group" style="margin-bottom: 6px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                  <label class="form-label" style="margin-bottom: 0; font-size: 0.72rem;">Letter Spacing / Tracking:</label>
+                  <div style="display: flex; align-items: center; gap: 2px;">
+                    <input type="number" id="inspectorSubElemSpacingInput" class="form-input" min="-5" max="25" step="0.5" value="0" style="width: 56px; padding: 1px 4px; font-size: 0.72rem; text-align: right;">
+                    <span style="font-size: 0.7rem; color: var(--text-muted);">px</span>
+                  </div>
+                </div>
+                <input type="range" id="inspectorSubElemSpacingSlider" class="form-slider" min="-3" max="20" step="0.5" value="0">
+              </div>
+
+              <!-- Font Weight (NEW) -->
+              <div class="form-group" style="margin-bottom: 6px;">
+                <label class="form-label" style="font-size: 0.72rem;">Font Weight / Thickness:</label>
+                <select id="inspectorSubElemFontWeight" class="form-select" style="padding: 2px 6px; font-size: 0.75rem;">
+                  <option value="default">Default / Inherited</option>
+                  <option value="normal">Normal (400)</option>
+                  <option value="500">Medium (500)</option>
+                  <option value="600">Semi-Bold (600)</option>
+                  <option value="bold">Bold (700)</option>
+                  <option value="800">Extra-Bold (800)</option>
+                  <option value="900">Black Heavy (900)</option>
+                </select>
+              </div>
+
+              <!-- Text Outline / Stroke (NEW) -->
+              <div class="form-group" style="margin-bottom: 6px; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.2); border-radius: 6px; padding: 6px 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                  <label style="display: flex; align-items: center; gap: 6px; font-size: 0.72rem; cursor: pointer; font-weight: 600; color: #00f0ff; margin-bottom: 0;">
+                    <input type="checkbox" id="inspectorSubElemOutlineToggle"> Text Outline / Stroke
+                  </label>
+                  <div style="display: flex; align-items: center; gap: 2px;">
+                    <input type="number" id="inspectorSubElemOutlineWidthInput" class="form-input" min="0" max="15" step="0.5" value="0" style="width: 50px; padding: 1px 4px; font-size: 0.72rem; text-align: right;">
+                    <span style="font-size: 0.7rem; color: var(--text-muted);">px</span>
+                  </div>
+                </div>
+                <input type="range" id="inspectorSubElemOutlineWidthSlider" class="form-slider" min="0" max="10" step="0.5" value="0" style="margin-bottom: 4px;">
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <span style="font-size: 0.7rem; color: var(--text-muted);">Outline Color:</span>
+                  <input type="color" id="inspectorSubElemOutlineColorInput" value="#000000" style="width: 28px; height: 24px; border: none; border-radius: 4px; cursor: pointer;">
+                  <input type="text" id="inspectorSubElemOutlineColorHex" class="form-input" value="#000000" style="flex: 1; padding: 1px 4px; font-size: 0.7rem;">
+                </div>
+              </div>
+
+              <!-- Text Drop Shadow (NEW) -->
+              <div class="form-group" style="margin-bottom: 6px; background: rgba(204, 255, 0, 0.04); border: 1px solid rgba(204, 255, 0, 0.2); border-radius: 6px; padding: 6px 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                  <label style="display: flex; align-items: center; gap: 6px; font-size: 0.72rem; cursor: pointer; font-weight: 600; color: var(--accent-volt); margin-bottom: 0;">
+                    <input type="checkbox" id="inspectorSubElemShadowToggle"> Drop Shadow
+                  </label>
+                  <div style="display: flex; align-items: center; gap: 2px;">
+                    <input type="number" id="inspectorSubElemShadowBlurInput" class="form-input" min="0" max="40" step="1" value="0" style="width: 50px; padding: 1px 4px; font-size: 0.72rem; text-align: right;">
+                    <span style="font-size: 0.7rem; color: var(--text-muted);">blur</span>
+                  </div>
+                </div>
+                <input type="range" id="inspectorSubElemShadowBlurSlider" class="form-slider" min="0" max="30" step="1" value="0" style="margin-bottom: 4px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 4px;">
+                  <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <span style="font-size: 0.7rem; color: var(--text-muted);">Offset X:</span>
+                    <input type="number" id="inspectorSubElemShadowOffsetXInput" class="form-input" min="-30" max="30" step="1" value="0" style="width: 44px; padding: 1px 4px; font-size: 0.7rem; text-align: right;">
+                  </div>
+                  <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <span style="font-size: 0.7rem; color: var(--text-muted);">Offset Y:</span>
+                    <input type="number" id="inspectorSubElemShadowOffsetYInput" class="form-input" min="-30" max="30" step="1" value="0" style="width: 44px; padding: 1px 4px; font-size: 0.7rem; text-align: right;">
+                  </div>
+                </div>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <span style="font-size: 0.7rem; color: var(--text-muted);">Shadow Color:</span>
+                  <input type="color" id="inspectorSubElemShadowColorInput" value="#000000" style="width: 28px; height: 24px; border: none; border-radius: 4px; cursor: pointer;">
+                  <input type="text" id="inspectorSubElemShadowColorHex" class="form-input" value="rgba(0,0,0,0.85)" style="flex: 1; padding: 1px 4px; font-size: 0.7rem;">
+                </div>
+              </div>
+
 
 
 
@@ -5196,7 +5324,87 @@
 
           <!-- 1. Custom Text Stickers Section -->
 
-          <div class="section">
+          
+          <!-- ON-CANVAS SELECTED TEXT QUICK EDITOR (NEW USER REQUIREMENT) -->
+          <div class="section" id="textTabSelectedElementSection" style="background: rgba(0, 240, 255, 0.05); border: 1px solid rgba(0, 240, 255, 0.3); border-radius: 8px; padding: 10px; margin-bottom: 12px;">
+            <div class="section-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="color: #00f0ff; font-weight: 700;">🎯 Selected On-Canvas Text Editor</span>
+              <span id="textTabSelectedElementBadge" style="font-size: 0.7rem; color: var(--accent-volt); font-weight: 700;">Click any text</span>
+            </div>
+            <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 8px;">
+              Select any individual text directly on the canvas or from this list to edit size, color, spacing, position, shadow, outline, and text:
+            </div>
+
+            <!-- Target Text Dropdown -->
+            <div class="form-group" style="margin-bottom: 8px;">
+              <select id="textTabElementSelect" class="form-select" style="font-size: 0.8rem; font-weight: 600;">
+                <option value="">(Click on canvas or select a text element...)</option>
+              </select>
+            </div>
+
+            <div id="textTabElementEditorBody" style="display: none;">
+              <!-- Change Text -->
+              <div class="form-group" style="margin-bottom: 8px;">
+                <label class="form-label" style="font-size: 0.72rem; margin-bottom: 2px;">Change Text:</label>
+                <input type="text" id="textTabElementTextInput" class="form-input" placeholder="Type custom text...">
+              </div>
+
+              <!-- Size Scale & Letter Spacing Grid -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                    <label class="form-label" style="font-size: 0.7rem; margin-bottom: 0;">Size Scale:</label>
+                    <span id="textTabElementSizeVal" style="font-size: 0.7rem; color: var(--accent-volt); font-weight: 700;">100%</span>
+                  </div>
+                  <input type="range" id="textTabElementSizeSlider" class="form-slider" min="30" max="300" step="5" value="100">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                    <label class="form-label" style="font-size: 0.7rem; margin-bottom: 0;">Letter Spacing:</label>
+                    <span id="textTabElementSpacingVal" style="font-size: 0.7rem; color: #00f0ff; font-weight: 700;">0px</span>
+                  </div>
+                  <input type="range" id="textTabElementSpacingSlider" class="form-slider" min="-3" max="20" step="0.5" value="0">
+                </div>
+              </div>
+
+              <!-- Text Color & Font Family Grid -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" style="font-size: 0.7rem; margin-bottom: 2px;">Text Color:</label>
+                  <div style="display: flex; gap: 4px; align-items: center;">
+                    <input type="color" id="textTabElementColorInput" value="#ffffff" style="width: 28px; height: 26px; border: none; border-radius: 4px; cursor: pointer;">
+                    <input type="text" id="textTabElementColorHex" class="form-input" placeholder="Default" style="flex: 1; font-size: 0.7rem; padding: 2px 4px;">
+                  </div>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" style="font-size: 0.7rem; margin-bottom: 2px;">Font Family:</label>
+                  <select id="textTabElementFontFamily" class="form-select" style="font-size: 0.75rem; padding: 2px 6px;">
+                    <option value="default">Inherited</option>
+                    <option value="athletic">Athletic Bold</option>
+                    <option value="bebas">Bebas Neue</option>
+                    <option value="teko">Teko Tall</option>
+                    <option value="bungee">Bungee Heavy</option>
+                    <option value="modern">Modern Sans</option>
+                    <option value="mono">JetBrains Mono</option>
+                    <option value="serif">Playfair Serif</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Position Nudge Buttons & Reset -->
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+                <div style="display: flex; gap: 4px; align-items: center;">
+                  <span style="font-size: 0.7rem; color: var(--text-muted);">Nudge:</span>
+                  <button type="button" class="btn btn-secondary" id="textTabNudgeLeftBtn" style="padding: 1px 6px; font-size: 0.7rem;">◀</button>
+                  <button type="button" class="btn btn-secondary" id="textTabNudgeRightBtn" style="padding: 1px 6px; font-size: 0.7rem;">▶</button>
+                  <button type="button" class="btn btn-secondary" id="textTabNudgeUpBtn" style="padding: 1px 6px; font-size: 0.7rem;">▲</button>
+                  <button type="button" class="btn btn-secondary" id="textTabNudgeDownBtn" style="padding: 1px 6px; font-size: 0.7rem;">▼</button>
+                </div>
+                <button type="button" class="btn btn-secondary" id="textTabResetElementBtn" style="padding: 2px 8px; font-size: 0.7rem;">↺ Reset Style</button>
+              </div>
+            </div>
+          </div>
+<div class="section">
 
             <div class="section-title">
 

@@ -82,6 +82,201 @@ export class OverlayRenderer {
     this.bgImage = image;
   }
 
+  // ==========================================
+  // SINGLE ACTIVITY INDIVIDUAL TEXT & SPLIT HELPERS
+  // ==========================================
+
+  getSplitDisplayName(it, idx, config, preferShort = false) {
+    if (!it) return '';
+    if (config && config.splitCustomLabels) {
+      const labels = config.splitCustomLabels;
+      const k = it.index;
+      if (k !== undefined) {
+        if (labels[k] !== undefined && labels[k] !== '') return String(labels[k]);
+        if (labels[String(k)] !== undefined && labels[String(k)] !== '') return String(labels[String(k)]);
+      }
+      if (labels[idx + 1] !== undefined && labels[idx + 1] !== '') return String(labels[idx + 1]);
+      if (labels[String(idx + 1)] !== undefined && labels[String(idx + 1)] !== '') return String(labels[String(idx + 1)]);
+      if (it.name && labels[it.name] !== undefined && labels[it.name] !== '') return String(labels[it.name]);
+    }
+    if (it.customName) return String(it.customName);
+    if (preferShort) return it.shortName || `${idx + 1}`;
+    return it.name || it.shortName || `Split ${idx + 1}`;
+  }
+
+  recordTextBound(widgetKey, partKey, label, x, y, width, height, textStr = '', options = {}) {
+    if (!this.textBounds) this.textBounds = {};
+    const fullKey = `${widgetKey}__${partKey}`;
+    this.textBounds[fullKey] = {
+      key: fullKey,
+      widgetKey,
+      partKey,
+      label: label || `${widgetKey} ${partKey}`,
+      x: Math.round(x),
+      y: Math.round(y),
+      w: Math.round(Math.max(12, width)),
+      h: Math.round(Math.max(12, height)),
+      text: String(textStr || ''),
+      options
+    };
+  }
+
+  recordTextBoundFromDraw(widgetKey, partKey, label, textStr, drawX, drawY, ctx, customW = null, customH = null) {
+    if (!textStr) return;
+    const fontStr = ctx.font || '';
+    const match = fontStr.match(/(\d+)px/);
+    const fontSize = match ? parseInt(match[1], 10) : 14;
+    const textW = customW !== null ? customW : Math.max(10, ctx.measureText(String(textStr)).width);
+    const textH = customH !== null ? customH : fontSize * 1.18;
+    const align = ctx.textAlign || 'left';
+    const baseline = ctx.textBaseline || 'alphabetic';
+
+    let boxX = drawX;
+    if (align === 'center') boxX = drawX - textW / 2;
+    else if (align === 'right') boxX = drawX - textW;
+
+    let boxY = drawY;
+    if (baseline === 'top') boxY = drawY;
+    else if (baseline === 'middle') boxY = drawY - textH / 2;
+    else if (baseline === 'bottom') boxY = drawY - textH;
+    else boxY = drawY - textH * 0.82;
+
+    this.recordTextBound(widgetKey, partKey, label, boxX, boxY, textW, textH, textStr, {
+      align, baseline, fontSize, color: ctx.fillStyle
+    });
+  }
+
+  drawSingleText(ctx, widgetKey, partKey, label, defaultText, x, y, options = {}) {
+    const config = this.currentConfig || (window.state && window.state.config) || {};
+    if (this.isElementHidden(config, widgetKey, partKey)) return { x, y, w: 0, h: 0 };
+
+    const off = this.getElementOffset(config, widgetKey, partKey);
+    const textOverride = this.getTextOverride(config, widgetKey, partKey, defaultText);
+    const textToDraw = (textOverride !== undefined && textOverride !== null && textOverride !== '')
+      ? String(textOverride)
+      : String(defaultText || '');
+    if (!textToDraw) return { x, y, w: 0, h: 0 };
+
+    ctx.save();
+    this.applySubPartRotation(ctx, config, widgetKey, partKey, x, y);
+
+    const drawX = x + (off.x || 0);
+    const drawY = y + (off.y || 0);
+
+    const weight = (off.fontWeight && off.fontWeight !== 'default') ? off.fontWeight : (options.weight || 'bold');
+    let baseFontSize = options.fontSize || 14;
+    let scale = typeof off.scale === 'number' && !isNaN(off.scale) ? off.scale / 100 : 1.0;
+    const finalSize = Math.max(6, Math.round(baseFontSize * scale));
+    const fontName = (off.fontFamily && off.fontFamily !== 'default') ? off.fontFamily : (options.fontFamily || config.fontFamily);
+    const fontFam = this.getFontFamily(fontName);
+    ctx.font = `${weight} ${finalSize}px ${fontFam}`;
+
+    if (options.align) ctx.textAlign = options.align;
+    if (options.baseline) ctx.textBaseline = options.baseline;
+    const align = ctx.textAlign || 'left';
+    const baseline = ctx.textBaseline || 'alphabetic';
+
+    const letterSpacing = off.letterSpacing !== undefined ? off.letterSpacing : (options.letterSpacing !== undefined ? options.letterSpacing : 0);
+    if (letterSpacing) ctx.letterSpacing = `${letterSpacing}px`;
+
+    const metrics = ctx.measureText(textToDraw);
+    const textW = Math.max(10, metrics.width || (finalSize * textToDraw.length * 0.6));
+    const textH = finalSize * 1.18;
+
+    let boxX = drawX;
+    if (align === 'center') boxX = drawX - textW / 2;
+    else if (align === 'right') boxX = drawX - textW;
+
+    let boxY = drawY;
+    if (baseline === 'top') boxY = drawY;
+    else if (baseline === 'middle') boxY = drawY - textH / 2;
+    else if (baseline === 'bottom') boxY = drawY - textH;
+    else boxY = drawY - textH * 0.82;
+
+    this.recordTextBound(widgetKey, partKey, label, boxX, boxY, textW, textH, textToDraw, {
+      align, baseline, fontSize: finalSize, color: off.color, letterSpacing, weight
+    });
+
+    const hasShadow = off.shadowToggle || off.shadowColor || off.shadowBlur || off.z > 1;
+    if (hasShadow) {
+      ctx.shadowColor = off.shadowColor || 'rgba(0, 0, 0, 0.75)';
+      ctx.shadowBlur = typeof off.shadowBlur === 'number' ? off.shadowBlur : Math.min(20, (off.z || 1) * 4);
+      ctx.shadowOffsetX = typeof off.shadowOffsetX === 'number' ? off.shadowOffsetX : 0;
+      ctx.shadowOffsetY = typeof off.shadowOffsetY === 'number' ? off.shadowOffsetY : Math.min(10, (off.z || 1) * 2);
+    }
+
+    const hasOutline = off.outlineToggle || (typeof off.outlineWidth === 'number' && off.outlineWidth > 0);
+    if (hasOutline) {
+      ctx.save();
+      ctx.strokeStyle = off.outlineColor || '#000000';
+      ctx.lineWidth = (off.outlineWidth || 1) * 2;
+      ctx.lineJoin = 'round';
+      ctx.strokeText(textToDraw, drawX, drawY);
+      ctx.restore();
+    }
+
+    const fillColor = (off.color && off.color !== 'default') ? off.color : (options.color || ctx.fillStyle);
+    ctx.fillStyle = fillColor;
+    ctx.fillText(textToDraw, drawX, drawY);
+
+    ctx.restore();
+    return { x: boxX, y: boxY, w: textW, h: textH };
+  }
+
+  drawSingleActivitySelectionGizmo(ctx, config) {
+    const selKey = (window.state && window.state.selectedTextKey) || this.selectedTextKey;
+    if (!selKey || !this.textBounds) return;
+    const tb = this.textBounds[selKey];
+    if (!tb || tb.w <= 0 || tb.h <= 0) return;
+
+    ctx.save();
+    const pad = 4;
+    const gx = tb.x - pad;
+    const gy = tb.y - pad;
+    const gw = tb.w + pad * 2;
+    const gh = tb.h + pad * 2;
+
+    // Glowing dashed cyan bounding box
+    ctx.strokeStyle = '#00f0ff';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(gx, gy, gw, gh);
+
+    // Subtle cyan tint
+    ctx.fillStyle = 'rgba(0, 240, 255, 0.08)';
+    ctx.fillRect(gx, gy, gw, gh);
+
+    // Corner dot handles
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#00f0ff';
+    const dotR = 2.5;
+    [[gx, gy], [gx + gw, gy], [gx, gy + gh], [gx + gw, gy + gh]].forEach(([cx, cy]) => {
+      ctx.beginPath();
+      ctx.arc(cx, cy, dotR, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // Tag badge on top
+    const tagText = tb.label || tb.partKey;
+    ctx.font = 'bold 9px sans-serif';
+    const tagW = ctx.measureText(tagText).width + 8;
+    const tagH = 14;
+    const tagX = gx;
+    const tagY = gy - tagH - 2;
+
+    ctx.fillStyle = '#00f0ff';
+    this.drawRoundedRect(ctx, tagX, Math.max(2, tagY), tagW, tagH, 3);
+    ctx.fill();
+
+    ctx.fillStyle = '#000000';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(tagText, tagX + 4, Math.max(2, tagY) + tagH / 2);
+
+    ctx.restore();
+  }
+
+
   recordBounds(key, name, x, y, width, height, customRot = null) {
     if (!this.widgetBounds) this.widgetBounds = {};
     const rot = (typeof customRot === 'number')
@@ -426,29 +621,51 @@ export class OverlayRenderer {
         const baseKey = widgetKey.split('_')[0];
         offsets = config.widgetElementOffsets[baseKey];
       }
-      if (!offsets) {
-        return { x: 0, y: 0, z: 1, hidden: false, scale: 100, fontFamily: 'default', color: 'default' };
-      }
-      let part = offsets[partKey];
-      if (!part) {
-        if (partKey === 'val') part = offsets['value'];
-        else if (partKey === 'value') part = offsets['val'];
-        else if (partKey === 'sec') part = offsets['secondary'];
-        else if (partKey === 'secondary') part = offsets['sec'];
-      }
-      if (part) {
-        return {
-          x: typeof part.x === 'number' ? part.x : 0,
-          y: typeof part.y === 'number' ? part.y : 0,
-          z: typeof part.z === 'number' ? part.z : 1,
-          hidden: part.hidden === true || part.visible === false,
-          scale: typeof part.scale === 'number' && !isNaN(part.scale) ? part.scale : 100,
-          fontFamily: part.fontFamily || 'default',
-          color: (part.color && part.color !== 'default') ? part.color : 'default',
-        };
+      if (offsets) {
+        let part = offsets[partKey];
+        if (!part) {
+          if (partKey === 'val') part = offsets['value'];
+          else if (partKey === 'value') part = offsets['val'];
+          else if (partKey === 'sec') part = offsets['secondary'];
+          else if (partKey === 'secondary') part = offsets['sec'];
+          else if (partKey.startsWith('lap_')) part = offsets['lap'] || offsets['laps'] || offsets['lapLabels'];
+          else if (partKey.startsWith('pace_')) part = offsets['pace'] || offsets['paceLabels'];
+          else if (partKey.startsWith('time_')) part = offsets['time'];
+          else if (partKey.startsWith('hr_')) part = offsets['hr'] || offsets['avgHr'];
+          else if (partKey.endsWith('_val')) part = offsets[partKey.replace('_val', '')]?.value || offsets['val'] || offsets['value'];
+          else if (partKey.endsWith('_lbl')) part = offsets[partKey.replace('_lbl', '')]?.label || offsets['label'];
+        }
+        if (part) {
+          return {
+            x: typeof part.x === 'number' ? part.x : 0,
+            y: typeof part.y === 'number' ? part.y : 0,
+            z: typeof part.z === 'number' ? part.z : 1,
+            hidden: part.hidden === true || part.visible === false,
+            scale: typeof part.scale === 'number' && !isNaN(part.scale) ? part.scale : 100,
+            fontFamily: part.fontFamily || 'default',
+            color: (part.color && part.color !== 'default') ? part.color : 'default',
+            letterSpacing: typeof part.letterSpacing === 'number' ? part.letterSpacing : (part.letterSpacing ? parseFloat(part.letterSpacing) : 0),
+            fontWeight: part.fontWeight || 'default',
+            text: part.text !== undefined ? part.text : undefined,
+            shadowToggle: part.shadowToggle === true,
+            shadowBlur: typeof part.shadowBlur === 'number' ? part.shadowBlur : 0,
+            shadowOffsetX: typeof part.shadowOffsetX === 'number' ? part.shadowOffsetX : 0,
+            shadowOffsetY: typeof part.shadowOffsetY === 'number' ? part.shadowOffsetY : 0,
+            shadowColor: part.shadowColor || 'rgba(0, 0, 0, 0.75)',
+            outlineToggle: part.outlineToggle === true,
+            outlineWidth: typeof part.outlineWidth === 'number' ? part.outlineWidth : 0,
+            outlineColor: part.outlineColor || '#000000',
+            rotation: typeof part.rotation === 'number' ? part.rotation : 0
+          };
+        }
       }
     }
-    return { x: 0, y: 0, z: 1, hidden: false, scale: 100, fontFamily: 'default', color: 'default' };
+    return {
+      x: 0, y: 0, z: 1, hidden: false, scale: 100, fontFamily: 'default', color: 'default',
+      letterSpacing: 0, fontWeight: 'default', text: undefined,
+      shadowToggle: false, shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, shadowColor: 'rgba(0, 0, 0, 0.75)',
+      outlineToggle: false, outlineWidth: 0, outlineColor: '#000000', rotation: 0
+    };
   }
 
   getSubPartColor(config, widgetKey, partKey, defaultColor) {
@@ -473,6 +690,12 @@ export class OverlayRenderer {
   }
 
   getTextOverride(config, widgetKey, fieldKey, defaultVal) {
+    if (config && config.widgetElementOffsets && config.widgetElementOffsets[widgetKey] && config.widgetElementOffsets[widgetKey][fieldKey]) {
+      const tVal = config.widgetElementOffsets[widgetKey][fieldKey].text;
+      if (tVal !== undefined && tVal !== null && String(tVal).trim() !== '') {
+        return String(tVal);
+      }
+    }
     if (config && config.widgetTextOverrides && config.widgetTextOverrides[widgetKey]) {
       const val = config.widgetTextOverrides[widgetKey][fieldKey];
       if (val !== undefined && val !== null && String(val).trim() !== '') {
@@ -786,6 +1009,48 @@ export class OverlayRenderer {
 
     // Reset bounding boxes on every render
     this.widgetBounds = {};
+    this.textBounds = {};
+    this.currentConfig = config;
+
+    const origFillText = ctx.fillText;
+    const self = this;
+    ctx.fillText = function(textStr, fx, fy, maxWidth) {
+      if (textStr !== undefined && textStr !== null && String(textStr).trim() !== '' && self._currentActiveWidget && !config.isWeeklyMode) {
+        const s = String(textStr).trim();
+        const wKey = self._currentActiveWidget;
+        let pKey = null;
+        let pLabel = null;
+        if (wKey === 'header') {
+          if (self._headerTitleStr && (s === self._headerTitleStr.trim() || s === self._headerTitleStr.trim().toUpperCase())) {
+            pKey = 'title'; pLabel = 'Header Title';
+          } else if (self._headerSubStr && (s.includes(self._headerSubStr.trim()) || s.includes(self._headerSubStr.trim().toUpperCase()))) {
+            pKey = 'subtitle'; pLabel = 'Date & Subtitle';
+          } else if (self._headerRunnerStr && s.includes(self._headerRunnerStr.trim())) {
+            pKey = 'runner'; pLabel = 'Runner Tag';
+          } else if (self._headerLocationStr && s.includes(self._headerLocationStr.trim())) {
+            pKey = 'location'; pLabel = 'Location';
+          }
+        } else if (wKey === 'hero') {
+          if (self._heroValStr && s === String(self._heroValStr).trim()) {
+            pKey = 'val'; pLabel = 'Hero Value';
+          } else if (self._heroLabelStr && (s === self._heroLabelStr.trim() || s === self._heroLabelStr.trim().toUpperCase())) {
+            pKey = 'label'; pLabel = 'Hero Label';
+          } else if (self._heroUnitStr && (s === self._heroUnitStr.trim() || s === self._heroUnitStr.trim().toUpperCase())) {
+            pKey = 'unit'; pLabel = 'Hero Unit';
+          }
+        } else if (wKey === 'metrics' && self._activeMetricItem) {
+          if (s === String(self._activeMetricItem.val).trim()) {
+            pKey = `${self._activeMetricItem.key}_val`; pLabel = `${self._activeMetricItem.label} Value`;
+          } else if (s === String(self._activeMetricItem.label).trim() || s === String(self._activeMetricItem.label).trim().toUpperCase()) {
+            pKey = `${self._activeMetricItem.key}_lbl`; pLabel = `${self._activeMetricItem.label} Label`;
+          }
+        }
+        if (pKey) {
+          self.recordTextBoundFromDraw(wKey, pKey, pLabel, String(textStr), fx, fy, this);
+        }
+      }
+      return origFillText.apply(this, arguments);
+    };
 
     const theme = THEMES[config.theme] || THEMES.volt;
     const accentColor = config.customAccentColor || theme.accent;
@@ -848,6 +1113,10 @@ export class OverlayRenderer {
       }
       ctx.stroke();
     }
+    if (!config.isWeeklyMode && (!activity || !activity.isWeeklyRecap)) {
+      this.drawSingleActivitySelectionGizmo(ctx, config);
+    }
+    ctx.fillText = origFillText;
     ctx.restore();
   }
 
@@ -1616,7 +1885,9 @@ export class OverlayRenderer {
 
     const font = this.getFontFamily(elStyle.fontFamily !== 'default' ? elStyle.fontFamily : config.fontFamily);
     const design = config.headerTemplate || config.headerDesign || 'modern';
+    this._currentActiveWidget = widgetKey;
     let title = this.getTextOverride(config, widgetKey, 'title', config.customTitle || activity.title || 'Morning Run');
+    this._headerTitleStr = title;
     let dateText = this.getTextOverride(config, widgetKey, 'subtitle', config.customSubtitle || `${activity.dateFormatted} • ${activity.timeFormatted}`);
     let runnerName = this.getTextOverride(config, widgetKey, 'runner', config.runnerName || '@runner');
     let location = this.getTextOverride(config, widgetKey, 'location', config.locationName || '');
@@ -3484,6 +3755,7 @@ export class OverlayRenderer {
 
     const font = this.getFontFamily(elStyle.fontFamily !== 'default' ? elStyle.fontFamily : config.fontFamily);
     const design = config.heroDesign || 'mega';
+    this._currentActiveWidget = widgetKey;
     const heroType = config.heroMetric || 'distance';
 
     let mainVal = activity.distanceMain;
@@ -3511,6 +3783,9 @@ export class OverlayRenderer {
     label = this.getTextOverride(config, widgetKey, 'label', label);
     mainVal = this.getTextOverride(config, widgetKey, 'value', mainVal);
     mainUnit = this.getTextOverride(config, widgetKey, 'unit', mainUnit);
+    this._heroValStr = mainVal;
+    this._heroLabelStr = label;
+    this._heroUnitStr = mainUnit;
 
     const offLabel = this.getElementOffset(config, widgetKey, 'label');
     const offVal = this.getElementOffset(config, widgetKey, 'value');
@@ -6302,6 +6577,7 @@ export class OverlayRenderer {
       ctx.font = this.getSubPartFont(config, widgetKey, 'title', 'bold', 13);
       ctx.letterSpacing = '1px';
       ctx.fillText(chartTitle, x + padX + offTitle.x, titleY + offTitle.y);
+      this.recordTextBoundFromDraw(widgetKey, 'title', 'Splits Chart Title', chartTitle, x + padX + offTitle.x, titleY + offTitle.y, ctx);
       ctx.restore();
     }
 
@@ -6362,7 +6638,9 @@ export class OverlayRenderer {
           ctx.textAlign = 'right';
           ctx.fillStyle = sOff.lap.color !== 'default' ? sOff.lap.color : textMuted;
           ctx.font = this.getSplitFont(config, widgetKey, idx, 'lap', 'bold', 12);
-          ctx.fillText(it.name || it.shortName, midX - 16 + sOff.lap.x, sy + 4 + sOff.lap.y);
+          const splitLabel = this.getSplitDisplayName(it, idx, config);
+        ctx.fillText(splitLabel, midX - 16 + sOff.lap.x, sy + 4 + sOff.lap.y);
+        this.recordTextBoundFromDraw(widgetKey, `lap_${idx}`, `Split ${idx + 1} Label`, splitLabel, midX - 16 + sOff.lap.x, sy + 4 + sOff.lap.y, ctx);
           ctx.restore();
         }
 
@@ -6417,7 +6695,9 @@ export class OverlayRenderer {
           ctx.textAlign = 'left';
           ctx.fillStyle = sOff.lap.color !== 'default' ? sOff.lap.color : textMuted;
           ctx.font = this.getSplitFont(config, widgetKey, idx, 'lap', 'bold', 11);
-          ctx.fillText(it.name || it.shortName, pillX + 16 + sOff.lap.x, py + pillH / 2 + 4 + sOff.lap.y);
+          const splitLabel = this.getSplitDisplayName(it, idx, config);
+        ctx.fillText(splitLabel, pillX + 16 + sOff.lap.x, py + pillH / 2 + 4 + sOff.lap.y);
+        this.recordTextBoundFromDraw(widgetKey, `lap_${idx}`, `Split ${idx + 1} Pill`, splitLabel, pillX + 16 + sOff.lap.x, py + pillH / 2 + 4 + sOff.lap.y, ctx);
           ctx.restore();
         }
 
@@ -6541,7 +6821,9 @@ export class OverlayRenderer {
           ctx.textAlign = 'left';
           ctx.fillStyle = sOff.lap.color !== 'default' ? sOff.lap.color : (isFastest ? elAccent : textMuted);
           ctx.font = this.getSplitFont(config, widgetKey, idx, 'lap', 'bold', 11);
-          ctx.fillText(it.shortName, x + padX + 8 + sOff.lap.x, by + barH / 2 + 4 + sOff.lap.y);
+          const splitLabel = this.getSplitDisplayName(it, idx, config, true);
+        ctx.fillText(splitLabel, x + padX + 8 + sOff.lap.x, by + barH / 2 + 4 + sOff.lap.y);
+        this.recordTextBoundFromDraw(widgetKey, `lap_${idx}`, `Split ${idx + 1} Label`, splitLabel, x + padX + 8 + sOff.lap.x, by + barH / 2 + 4 + sOff.lap.y, ctx);
           ctx.restore();
         }
 
@@ -6595,7 +6877,9 @@ export class OverlayRenderer {
           ctx.textAlign = 'left';
           ctx.fillStyle = sOff.lap.color !== 'default' ? sOff.lap.color : textMuted;
           ctx.font = this.getSplitFont(config, widgetKey, idx, 'lap', 'bold', 10);
-          ctx.fillText(`SPLIT ${it.shortName}`, tx + 8 + sOff.lap.x, ty + 16 + sOff.lap.y);
+          const splitLabel = this.getSplitDisplayName(it, idx, config);
+          ctx.fillText(splitLabel, tx + 8 + sOff.lap.x, ty + 16 + sOff.lap.y);
+          this.recordTextBoundFromDraw(widgetKey, `lap_${idx}`, `Split ${idx + 1} Grid`, splitLabel, tx + 8 + sOff.lap.x, ty + 16 + sOff.lap.y, ctx);
           ctx.restore();
         }
 
@@ -6661,7 +6945,24 @@ export class OverlayRenderer {
       visibleSplits.forEach((it, idx) => {
         const sOff = this.getSplitItemOffsets(config, widgetKey, idx);
         if (sOff.split.hidden) return;
-        const rowY = tableStartY + idx * rowH + rowH * 0.75 + sOff.split.y;
+        const splitRowSpacing = typeof config.splitRowSpacing === 'number' ? config.splitRowSpacing : 0;
+        const rowStep = rowH + splitRowSpacing;
+        const rowY = tableStartY + idx * rowStep + rowH * 0.75 + sOff.split.y;
+
+        // Cross horizontal divider line between rows
+        if (config.splitShowDividers && idx > 0) {
+          ctx.save();
+          const divY = tableStartY + idx * rowStep;
+          ctx.strokeStyle = config.splitDividerColor || 'rgba(255, 255, 255, 0.12)';
+          ctx.lineWidth = 1;
+          const dStyle = config.splitDividerStyle || 'solid';
+          ctx.setLineDash(dStyle === 'dashed' ? [6, 4] : dStyle === 'dotted' ? [2, 3] : []);
+          ctx.beginPath();
+          ctx.moveTo(x + padX, divY);
+          ctx.lineTo(x + width - padX, divY);
+          ctx.stroke();
+          ctx.restore();
+        }
         const isFastest = it.isFastest && showFastest;
 
         computedCols.forEach((col) => {
@@ -6671,7 +6972,9 @@ export class OverlayRenderer {
             ctx.textAlign = col.align;
             ctx.fillStyle = sOff.lap.color !== 'default' ? sOff.lap.color : (isFastest ? elAccent : textMuted);
             ctx.font = this.getSplitFont(config, widgetKey, idx, 'lap', 'bold', cellFontSize);
-            ctx.fillText(it.name || it.shortName || ('Km ' + (idx + 1)), col.posX + sOff.lap.x, rowY + sOff.lap.y);
+            const splitLabel = this.getSplitDisplayName(it, idx, config);
+            ctx.fillText(splitLabel, col.posX + sOff.lap.x, rowY + sOff.lap.y);
+            this.recordTextBoundFromDraw(widgetKey, `lap_${idx}`, `Split ${idx + 1} Name`, splitLabel, col.posX + sOff.lap.x, rowY + sOff.lap.y, ctx);
             ctx.restore();
           } else if (col.key === 'pace' && !sOff.pace.hidden) {
             ctx.save();
@@ -6866,7 +7169,9 @@ export class OverlayRenderer {
           ctx.textAlign = 'left';
           ctx.fillStyle = sOff.lap.color !== 'default' ? sOff.lap.color : textMuted;
           ctx.font = this.getSplitFont(config, widgetKey, idx, 'lap', 'bold', 11);
-          ctx.fillText(`SPLIT ${it.shortName}`, cx + 12 + sOff.lap.x, cy + singleH / 2 + 4 + sOff.lap.y);
+          const splitLabel = this.getSplitDisplayName(it, idx, config);
+        ctx.fillText(splitLabel, cx + 12 + sOff.lap.x, cy + singleH / 2 + 4 + sOff.lap.y);
+        this.recordTextBoundFromDraw(widgetKey, `lap_${idx}`, `Split ${idx + 1} Card`, splitLabel, cx + 12 + sOff.lap.x, cy + singleH / 2 + 4 + sOff.lap.y, ctx);
           ctx.restore();
         }
 
@@ -6919,7 +7224,9 @@ export class OverlayRenderer {
           ctx.textAlign = 'left';
           ctx.fillStyle = sOff.lap.color !== 'default' ? sOff.lap.color : textMuted;
           ctx.font = this.getSplitFont(config, widgetKey, idx, 'lap', 'bold', 11);
-          ctx.fillText(it.shortName, axisX + 16 + sOff.lap.x, nodeY - 2 + sOff.lap.y);
+          const splitLabel = this.getSplitDisplayName(it, idx, config, true);
+        ctx.fillText(splitLabel, axisX + 16 + sOff.lap.x, nodeY - 2 + sOff.lap.y);
+        this.recordTextBoundFromDraw(widgetKey, `lap_${idx}`, `Split ${idx + 1} Label`, splitLabel, axisX + 16 + sOff.lap.x, nodeY - 2 + sOff.lap.y, ctx);
           ctx.restore();
         }
 
@@ -7269,7 +7576,24 @@ export class OverlayRenderer {
       items.forEach((it, idx) => {
         const sOff = this.getSplitItemOffsets(config, widgetKey, idx);
         if (sOff.split.hidden) return;
-        const ry = startY + idx * rowH + sOff.split.y;
+        const hbarSpacing = typeof config.splitRowSpacing === 'number' ? config.splitRowSpacing : 0;
+        const hbarStep = rowH + hbarSpacing;
+        const ry = startY + idx * hbarStep + sOff.split.y;
+
+        // Cross horizontal line in between them
+        if (config.splitShowDividers && idx > 0) {
+          ctx.save();
+          const divY = startY + idx * hbarStep - Math.max(1, hbarSpacing / 2);
+          ctx.strokeStyle = config.splitDividerColor || 'rgba(255, 255, 255, 0.12)';
+          ctx.lineWidth = 1;
+          const dStyle = config.splitDividerStyle || 'solid';
+          ctx.setLineDash(dStyle === 'dashed' ? [6, 4] : dStyle === 'dotted' ? [2, 3] : []);
+          ctx.beginPath();
+          ctx.moveTo(x + padX, divY);
+          ctx.lineTo(x + width - padX, divY);
+          ctx.stroke();
+          ctx.restore();
+        }
         const isFastest = it.isFastest && showFastest;
 
         // Lap / Split label on the left
@@ -7279,7 +7603,9 @@ export class OverlayRenderer {
           ctx.textAlign = 'left';
           ctx.fillStyle = sOff.lap.color !== 'default' ? sOff.lap.color : textMuted;
           ctx.font = this.getSplitFont(config, widgetKey, idx, 'lap', 'bold', 10);
-          ctx.fillText(it.shortName || `${idx + 1}`, x + padX + sOff.lap.x, ry + rowH / 2 + 4 + sOff.lap.y);
+          const splitLabel = this.getSplitDisplayName(it, idx, config, true);
+          ctx.fillText(splitLabel, x + padX + sOff.lap.x, ry + rowH / 2 + 4 + sOff.lap.y);
+          this.recordTextBoundFromDraw(widgetKey, `lap_${idx}`, `Split ${idx + 1} Label`, splitLabel, x + padX + sOff.lap.x, ry + rowH / 2 + 4 + sOff.lap.y, ctx);
           ctx.restore();
         }
 
@@ -7399,7 +7725,9 @@ export class OverlayRenderer {
         ctx.textAlign = 'center';
         ctx.fillStyle = sOff.lap.color !== 'default' ? sOff.lap.color : ((isAnim && it.isCurrent) ? elAccent : ((it.isFastest && showFastest) ? elAccent : textMuted));
         ctx.font = this.getSplitFont(config, widgetKey, idx, 'lap', '600', 10);
-        ctx.fillText(it.shortName, bx + barW / 2 + sOff.lap.x, barAreaY + barAreaH + 16 + sOff.split.y + sOff.lap.y);
+        const splitLabel = this.getSplitDisplayName(it, idx, config, true);
+        ctx.fillText(splitLabel, bx + barW / 2 + sOff.lap.x, barAreaY + barAreaH + 16 + sOff.split.y + sOff.lap.y);
+        this.recordTextBoundFromDraw(widgetKey, `lap_${idx}`, `Split ${idx + 1} Label`, splitLabel, bx + barW / 2 + sOff.lap.x, barAreaY + barAreaH + 16 + sOff.split.y + sOff.lap.y, ctx);
         ctx.restore();
       }
 

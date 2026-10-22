@@ -2776,6 +2776,115 @@ let arrowKeyGridTimer = null;
 
 
 
+
+// ==========================================
+// SINGLE ACTIVITY TEXT INTERACTION & HELPERS
+// ==========================================
+let isDraggingSingleText = false;
+let singleTextDragStart = { x: 0, y: 0 };
+let singleTextInitialOffset = { x: 0, y: 0 };
+let activeDragTextKey = null;
+
+function startSingleTextDrag(clientX, clientY, widgetKey, partKey) {
+  isDraggingSingleText = true;
+  activeDragTextKey = { widgetKey, partKey };
+  singleTextDragStart = { x: clientX, y: clientY };
+  const off = (state.config.widgetElementOffsets && state.config.widgetElementOffsets[widgetKey] && state.config.widgetElementOffsets[widgetKey][partKey]) || { x: 0, y: 0 };
+  singleTextInitialOffset = { x: typeof off.x === 'number' ? off.x : 0, y: typeof off.y === 'number' ? off.y : 0 };
+  pushUndoSnapshot();
+}
+
+function selectSingleText(textKey, clientX = null, clientY = null) {
+  if (!renderer || !renderer.textBounds || !renderer.textBounds[textKey]) return;
+  const tb = renderer.textBounds[textKey];
+  state.selectedTextKey = textKey;
+  state.selectedWidgetKey = tb.widgetKey;
+  state.selectedSubPartKey = tb.partKey;
+
+  // Sync widget selection & inspector
+  selectWidget(tb.widgetKey);
+
+  const subPartSelect = document.getElementById('gizmoSubPartSelect');
+  if (subPartSelect) {
+    let opt = Array.from(subPartSelect.options).find(o => o.value === tb.partKey);
+    if (!opt) {
+      opt = new Option(tb.label || tb.partKey, tb.partKey);
+      subPartSelect.add(opt);
+    }
+    subPartSelect.value = tb.partKey;
+  }
+
+  // Populate sub-element inspector
+  if (typeof updateSubElementInspector === 'function') {
+    updateSubElementInspector(tb.widgetKey, tb.partKey);
+  }
+
+  // Populate Text Tab top editor
+  syncTextTabEditor(textKey);
+
+  if (clientX !== null && clientY !== null) {
+    startSingleTextDrag(clientX, clientY, tb.widgetKey, tb.partKey);
+  }
+
+  triggerRender();
+}
+
+window.selectSingleText = selectSingleText;
+window.syncTextTabEditor = syncTextTabEditor;
+
+function syncTextTabEditor(textKey) {
+  const elSelect = document.getElementById('textTabElementSelect');
+  const textInput = document.getElementById('textTabElementTextInput');
+  const sizeSlider = document.getElementById('textTabElementSizeSlider');
+  const sizeVal = document.getElementById('textTabElementSizeVal');
+  const spacingSlider = document.getElementById('textTabElementSpacingSlider');
+  const spacingVal = document.getElementById('textTabElementSpacingVal');
+  const colorInput = document.getElementById('textTabElementColorInput');
+  const colorHex = document.getElementById('textTabElementColorHex');
+  const fontFamSelect = document.getElementById('textTabElementFontFamily');
+
+  if (!renderer || !renderer.textBounds) return;
+
+  if (elSelect) {
+    elSelect.innerHTML = '<option value="">-- Choose Text on Canvas --</option>';
+    for (const [k, b] of Object.entries(renderer.textBounds)) {
+      const opt = document.createElement('option');
+      opt.value = k;
+      opt.textContent = `${b.label || k} ("${(b.text || '').substring(0, 15)}")`;
+      if (k === textKey) opt.selected = true;
+      elSelect.appendChild(opt);
+    }
+    if (textKey) elSelect.value = textKey;
+  }
+
+  if (!textKey || !renderer.textBounds[textKey]) return;
+  const tb = renderer.textBounds[textKey];
+  const off = (state.config.widgetElementOffsets && state.config.widgetElementOffsets[tb.widgetKey] && state.config.widgetElementOffsets[tb.widgetKey][tb.partKey]) || {};
+
+  if (textInput) {
+    textInput.value = off.text !== undefined ? off.text : (tb.text || '');
+  }
+  if (sizeSlider) {
+    const s = typeof off.scale === 'number' && !isNaN(off.scale) ? off.scale : 100;
+    sizeSlider.value = s;
+    if (sizeVal) sizeVal.textContent = `${s}%`;
+  }
+  if (spacingSlider) {
+    const sp = typeof off.letterSpacing === 'number' ? off.letterSpacing : 0;
+    spacingSlider.value = sp;
+    if (spacingVal) spacingVal.textContent = `${sp}px`;
+  }
+  if (colorInput) {
+    const c = (off.color && off.color !== 'default') ? off.color : (tb.color || '#ffffff');
+    if (c.startsWith('#') && (c.length === 7 || c.length === 4)) colorInput.value = c;
+    if (colorHex) colorHex.value = c;
+  }
+  if (fontFamSelect) {
+    fontFamSelect.value = off.fontFamily || 'default';
+  }
+}
+
+
 function setupKeyboardShortcuts() {
 
 
@@ -2979,6 +3088,23 @@ function setupKeyboardShortcuts() {
         moveWeeklySelected(dx, dy, step);
         return;
       }
+      if (state.selectedTextKey && renderer && renderer.textBounds && renderer.textBounds[state.selectedTextKey]) {
+        e.preventDefault();
+        const dx = e.key === 'ArrowRight' ? 1 : (e.key === 'ArrowLeft' ? -1 : 0);
+        const dy = e.key === 'ArrowDown' ? 1 : (e.key === 'ArrowUp' ? -1 : 0);
+        const step = e.shiftKey ? 10 : 1;
+        const tb = renderer.textBounds[state.selectedTextKey];
+        if (!state.config.widgetElementOffsets) state.config.widgetElementOffsets = {};
+        if (!state.config.widgetElementOffsets[tb.widgetKey]) state.config.widgetElementOffsets[tb.widgetKey] = {};
+        if (!state.config.widgetElementOffsets[tb.widgetKey][tb.partKey]) state.config.widgetElementOffsets[tb.widgetKey][tb.partKey] = { x: 0, y: 0, z: 1 };
+        const obj = state.config.widgetElementOffsets[tb.widgetKey][tb.partKey];
+        obj.x = (typeof obj.x === 'number' ? obj.x : 0) + dx * step;
+        obj.y = (typeof obj.y === 'number' ? obj.y : 0) + dy * step;
+        updateSubElementInspector(tb.widgetKey, tb.partKey);
+        triggerRender();
+        return;
+      }
+
 
 
 
@@ -15672,6 +15798,60 @@ function setupSavedTemplatesControls() {
 
 
 function setupSplitsControls() {
+  // Wire Splits Row Spacing & Dividers
+  const splitRowSpacingSlider = document.getElementById('splitRowSpacingSlider');
+  const splitRowSpacingInput = document.getElementById('splitRowSpacingInput');
+  const splitShowDividersToggle = document.getElementById('splitShowDividersToggle');
+  const splitDividerColorInput = document.getElementById('splitDividerColorInput');
+  const splitDividerColorHex = document.getElementById('splitDividerColorHex');
+  const splitDividerStyleSelect = document.getElementById('splitDividerStyleSelect');
+
+  if (splitRowSpacingSlider) {
+    splitRowSpacingSlider.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value, 10) || 0;
+      if (splitRowSpacingInput) splitRowSpacingInput.value = val;
+      state.config.splitRowSpacing = val;
+      triggerRender();
+    });
+  }
+  if (splitRowSpacingInput) {
+    splitRowSpacingInput.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value, 10) || 0;
+      if (splitRowSpacingSlider) splitRowSpacingSlider.value = val;
+      state.config.splitRowSpacing = val;
+      triggerRender();
+    });
+  }
+  if (splitShowDividersToggle) {
+    splitShowDividersToggle.addEventListener('change', (e) => {
+      state.config.splitShowDividers = e.target.checked;
+      const ctrls = document.getElementById('splitDividerStyleControls');
+      if (ctrls) ctrls.style.display = e.target.checked ? 'block' : 'none';
+      triggerRender();
+    });
+  }
+  if (splitDividerColorInput) {
+    splitDividerColorInput.addEventListener('input', (e) => {
+      const val = e.target.value;
+      if (splitDividerColorHex) splitDividerColorHex.value = val;
+      state.config.splitDividerColor = val;
+      triggerRender();
+    });
+  }
+  if (splitDividerColorHex) {
+    splitDividerColorHex.addEventListener('input', (e) => {
+      state.config.splitDividerColor = e.target.value;
+      if (splitDividerColorInput && e.target.value.startsWith('#')) splitDividerColorInput.value = e.target.value;
+      triggerRender();
+    });
+  }
+  if (splitDividerStyleSelect) {
+    splitDividerStyleSelect.addEventListener('change', (e) => {
+      state.config.splitDividerStyle = e.target.value;
+      triggerRender();
+    });
+  }
+
 
 
 
@@ -16452,140 +16632,57 @@ function setupSplitsControls() {
 
 
 function renderSplitRowRenamerList() {
-
-
-
   const container = document.getElementById('splitRowRenamerList');
-
-
-
   if (!container) return;
 
-
-
-
-
-
-
   const isLapSource = state.config.splitDataSource === 'laps' && state.currentActivity?.hasLaps;
-
-
-
   const items = isLapSource ? state.currentActivity?.laps : state.currentActivity?.splits;
 
-
-
-
-
-
-
   if (!items || items.length === 0) {
-
-
-
     container.innerHTML = '<div style="font-size:0.75rem; color:var(--text-muted); padding:4px;">No splits loaded yet.</div>';
-
-
-
     return;
-
-
-
   }
 
-
-
-
-
-
-
   container.innerHTML = '';
-
-
-
   items.forEach((item, idx) => {
-
-
-
     const row = document.createElement('div');
-
-
-
     row.className = 'split-renamer-row';
-
-
-
-    const currentCustom = (state.config.splitCustomLabels && state.config.splitCustomLabels[item.index]) || '';
-
-
-
-
-
-
+    const k = item.index !== undefined ? item.index : (idx + 1);
+    const currentCustom = (state.config.splitCustomLabels && (
+      state.config.splitCustomLabels[k] ||
+      state.config.splitCustomLabels[String(k)] ||
+      state.config.splitCustomLabels[idx + 1] ||
+      state.config.splitCustomLabels[String(idx + 1)] ||
+      (item.name && state.config.splitCustomLabels[item.name])
+    )) || item.customName || '';
 
     row.innerHTML = `
-
-
-
       <span class="split-renamer-badge">${item.shortName || ('#' + (idx + 1))}</span>
-
-
-
-      <input type="text" class="split-renamer-input" placeholder="${item.name}" value="${currentCustom}">
-
-
-
+      <input type="text" class="split-renamer-input" placeholder="${item.name || ('Split ' + (idx + 1))}" value="${currentCustom}">
     `;
 
-
-
-
-
-
-
     const input = row.querySelector('.split-renamer-input');
-
-
-
     input.addEventListener('input', (e) => {
-
-
-
+      const val = e.target.value;
       if (!state.config.splitCustomLabels) state.config.splitCustomLabels = {};
-
-
-
-      state.config.splitCustomLabels[item.index] = e.target.value;
-
-
-
+      state.config.splitCustomLabels[k] = val;
+      state.config.splitCustomLabels[String(k)] = val;
+      state.config.splitCustomLabels[idx + 1] = val;
+      state.config.splitCustomLabels[String(idx + 1)] = val;
+      if (item.name) state.config.splitCustomLabels[item.name] = val;
+      item.customName = val;
+      if (state.currentActivity?.laps && state.currentActivity.laps[idx]) {
+        state.currentActivity.laps[idx].customName = val;
+      }
+      if (state.currentActivity?.splits && state.currentActivity.splits[idx]) {
+        state.currentActivity.splits[idx].customName = val;
+      }
       triggerRender();
-
-
-
     });
 
-
-
-
-
-
-
     container.appendChild(row);
-
-
-
   });
-
-
-
 }
-
-
-
-
-
-
 
 function updateSplitsDropdownAndTable() {
 
@@ -24349,6 +24446,34 @@ function setupElementInspectorControls() {
 
       if (subElemSizeVal) subElemSizeVal.textContent = `${sScale}%`;
 
+      const subElemSpacingSlider = document.getElementById('inspectorSubElemSpacingSlider');
+      const subElemSpacingInput = document.getElementById('inspectorSubElemSpacingInput');
+      const subElemFontWeight = document.getElementById('inspectorSubElemFontWeight');
+      const subElemOutlineToggle = document.getElementById('inspectorSubElemOutlineToggle');
+      const subElemOutlineWidthSlider = document.getElementById('inspectorSubElemOutlineWidthSlider');
+      const subElemOutlineColorInput = document.getElementById('inspectorSubElemOutlineColorInput');
+      const subElemShadowToggle = document.getElementById('inspectorSubElemShadowToggle');
+      const subElemShadowBlurSlider = document.getElementById('inspectorSubElemShadowBlurSlider');
+      const subElemShadowOffsetXInput = document.getElementById('inspectorSubElemShadowOffsetXInput');
+      const subElemShadowOffsetYInput = document.getElementById('inspectorSubElemShadowOffsetYInput');
+      const subElemShadowColorInput = document.getElementById('inspectorSubElemShadowColorInput');
+
+      const spVal = off.letterSpacing || 0;
+      if (subElemSpacingSlider) subElemSpacingSlider.value = spVal;
+      if (subElemSpacingInput) subElemSpacingInput.value = spVal;
+
+      if (subElemFontWeight) subElemFontWeight.value = off.fontWeight || 'default';
+
+      if (subElemOutlineToggle) subElemOutlineToggle.checked = off.outlineToggle === true;
+      if (subElemOutlineWidthSlider) subElemOutlineWidthSlider.value = off.outlineWidth || 0;
+      if (subElemOutlineColorInput) subElemOutlineColorInput.value = off.outlineColor || '#000000';
+
+      if (subElemShadowToggle) subElemShadowToggle.checked = off.shadowToggle === true;
+      if (subElemShadowBlurSlider) subElemShadowBlurSlider.value = off.shadowBlur || 0;
+      if (subElemShadowOffsetXInput) subElemShadowOffsetXInput.value = off.shadowOffsetX || 0;
+      if (subElemShadowOffsetYInput) subElemShadowOffsetYInput.value = off.shadowOffsetY || 0;
+      if (subElemShadowColorInput) subElemShadowColorInput.value = off.shadowColor || '#000000';
+
 
 
 
@@ -29868,6 +29993,90 @@ function setupElementInspectorControls() {
 
 
   }
+  // Extra controls: Letter Spacing, Font Weight, Outline, Drop Shadow
+  const subElemSpacingSlider = document.getElementById('inspectorSubElemSpacingSlider');
+  const subElemSpacingInput = document.getElementById('inspectorSubElemSpacingInput');
+  const subElemFontWeight = document.getElementById('inspectorSubElemFontWeight');
+  const subElemOutlineToggle = document.getElementById('inspectorSubElemOutlineToggle');
+  const subElemOutlineWidthSlider = document.getElementById('inspectorSubElemOutlineWidthSlider');
+  const subElemOutlineColorInput = document.getElementById('inspectorSubElemOutlineColorInput');
+  const subElemShadowToggle = document.getElementById('inspectorSubElemShadowToggle');
+  const subElemShadowBlurSlider = document.getElementById('inspectorSubElemShadowBlurSlider');
+  const subElemShadowOffsetXInput = document.getElementById('inspectorSubElemShadowOffsetXInput');
+  const subElemShadowOffsetYInput = document.getElementById('inspectorSubElemShadowOffsetYInput');
+  const subElemShadowColorInput = document.getElementById('inspectorSubElemShadowColorInput');
+
+  if (subElemSpacingSlider) {
+    subElemSpacingSlider.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value) || 0;
+      if (subElemSpacingInput) subElemSpacingInput.value = val;
+      getSubElemObj().letterSpacing = val;
+      triggerRender();
+    });
+  }
+  if (subElemSpacingInput) {
+    subElemSpacingInput.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value) || 0;
+      if (subElemSpacingSlider) subElemSpacingSlider.value = val;
+      getSubElemObj().letterSpacing = val;
+      triggerRender();
+    });
+  }
+  if (subElemFontWeight) {
+    subElemFontWeight.addEventListener('change', (e) => {
+      getSubElemObj().fontWeight = e.target.value;
+      triggerRender();
+    });
+  }
+  if (subElemOutlineToggle) {
+    subElemOutlineToggle.addEventListener('change', (e) => {
+      getSubElemObj().outlineToggle = e.target.checked;
+      triggerRender();
+    });
+  }
+  if (subElemOutlineWidthSlider) {
+    subElemOutlineWidthSlider.addEventListener('input', (e) => {
+      getSubElemObj().outlineWidth = parseFloat(e.target.value) || 0;
+      triggerRender();
+    });
+  }
+  if (subElemOutlineColorInput) {
+    subElemOutlineColorInput.addEventListener('input', (e) => {
+      getSubElemObj().outlineColor = e.target.value;
+      triggerRender();
+    });
+  }
+  if (subElemShadowToggle) {
+    subElemShadowToggle.addEventListener('change', (e) => {
+      getSubElemObj().shadowToggle = e.target.checked;
+      triggerRender();
+    });
+  }
+  if (subElemShadowBlurSlider) {
+    subElemShadowBlurSlider.addEventListener('input', (e) => {
+      getSubElemObj().shadowBlur = parseFloat(e.target.value) || 0;
+      triggerRender();
+    });
+  }
+  if (subElemShadowOffsetXInput) {
+    subElemShadowOffsetXInput.addEventListener('input', (e) => {
+      getSubElemObj().shadowOffsetX = parseFloat(e.target.value) || 0;
+      triggerRender();
+    });
+  }
+  if (subElemShadowOffsetYInput) {
+    subElemShadowOffsetYInput.addEventListener('input', (e) => {
+      getSubElemObj().shadowOffsetY = parseFloat(e.target.value) || 0;
+      triggerRender();
+    });
+  }
+  if (subElemShadowColorInput) {
+    subElemShadowColorInput.addEventListener('input', (e) => {
+      getSubElemObj().shadowColor = e.target.value;
+      triggerRender();
+    });
+  }
+
 
 
 
@@ -30820,6 +31029,92 @@ function setupElementInspectorControls() {
 
 
 function setupTextAndStickersControls() {
+  // Wire Top Selected Text on Canvas Editor
+  const textTabElementSelect = document.getElementById('textTabElementSelect');
+  const textTabElementTextInput = document.getElementById('textTabElementTextInput');
+  const textTabElementSizeSlider = document.getElementById('textTabElementSizeSlider');
+  const textTabElementSizeVal = document.getElementById('textTabElementSizeVal');
+  const textTabElementSpacingSlider = document.getElementById('textTabElementSpacingSlider');
+  const textTabElementSpacingVal = document.getElementById('textTabElementSpacingVal');
+  const textTabElementColorInput = document.getElementById('textTabElementColorInput');
+  const textTabElementColorHex = document.getElementById('textTabElementColorHex');
+  const textTabElementFontFamily = document.getElementById('textTabElementFontFamily');
+
+  if (textTabElementSelect) {
+    textTabElementSelect.addEventListener('change', (e) => {
+      const k = e.target.value;
+      if (k) selectSingleText(k);
+    });
+  }
+  if (textTabElementTextInput) {
+    textTabElementTextInput.addEventListener('input', (e) => {
+      const val = e.target.value;
+      if (state.selectedTextKey && renderer && renderer.textBounds && renderer.textBounds[state.selectedTextKey]) {
+        const tb = renderer.textBounds[state.selectedTextKey];
+        if (!state.config.widgetElementOffsets) state.config.widgetElementOffsets = {};
+        if (!state.config.widgetElementOffsets[tb.widgetKey]) state.config.widgetElementOffsets[tb.widgetKey] = {};
+        if (!state.config.widgetElementOffsets[tb.widgetKey][tb.partKey]) state.config.widgetElementOffsets[tb.widgetKey][tb.partKey] = { x: 0, y: 0, z: 1 };
+        state.config.widgetElementOffsets[tb.widgetKey][tb.partKey].text = val;
+        triggerRender();
+      }
+    });
+  }
+  if (textTabElementSizeSlider) {
+    textTabElementSizeSlider.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value, 10) || 100;
+      if (textTabElementSizeVal) textTabElementSizeVal.textContent = `${val}%`;
+      if (state.selectedTextKey && renderer && renderer.textBounds && renderer.textBounds[state.selectedTextKey]) {
+        const tb = renderer.textBounds[state.selectedTextKey];
+        if (!state.config.widgetElementOffsets) state.config.widgetElementOffsets = {};
+        if (!state.config.widgetElementOffsets[tb.widgetKey]) state.config.widgetElementOffsets[tb.widgetKey] = {};
+        if (!state.config.widgetElementOffsets[tb.widgetKey][tb.partKey]) state.config.widgetElementOffsets[tb.widgetKey][tb.partKey] = { x: 0, y: 0, z: 1 };
+        state.config.widgetElementOffsets[tb.widgetKey][tb.partKey].scale = val;
+        triggerRender();
+      }
+    });
+  }
+  if (textTabElementSpacingSlider) {
+    textTabElementSpacingSlider.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value) || 0;
+      if (textTabElementSpacingVal) textTabElementSpacingVal.textContent = `${val}px`;
+      if (state.selectedTextKey && renderer && renderer.textBounds && renderer.textBounds[state.selectedTextKey]) {
+        const tb = renderer.textBounds[state.selectedTextKey];
+        if (!state.config.widgetElementOffsets) state.config.widgetElementOffsets = {};
+        if (!state.config.widgetElementOffsets[tb.widgetKey]) state.config.widgetElementOffsets[tb.widgetKey] = {};
+        if (!state.config.widgetElementOffsets[tb.widgetKey][tb.partKey]) state.config.widgetElementOffsets[tb.widgetKey][tb.partKey] = { x: 0, y: 0, z: 1 };
+        state.config.widgetElementOffsets[tb.widgetKey][tb.partKey].letterSpacing = val;
+        triggerRender();
+      }
+    });
+  }
+  if (textTabElementColorInput) {
+    textTabElementColorInput.addEventListener('input', (e) => {
+      const val = e.target.value;
+      if (textTabElementColorHex) textTabElementColorHex.value = val;
+      if (state.selectedTextKey && renderer && renderer.textBounds && renderer.textBounds[state.selectedTextKey]) {
+        const tb = renderer.textBounds[state.selectedTextKey];
+        if (!state.config.widgetElementOffsets) state.config.widgetElementOffsets = {};
+        if (!state.config.widgetElementOffsets[tb.widgetKey]) state.config.widgetElementOffsets[tb.widgetKey] = {};
+        if (!state.config.widgetElementOffsets[tb.widgetKey][tb.partKey]) state.config.widgetElementOffsets[tb.widgetKey][tb.partKey] = { x: 0, y: 0, z: 1 };
+        state.config.widgetElementOffsets[tb.widgetKey][tb.partKey].color = val;
+        triggerRender();
+      }
+    });
+  }
+  if (textTabElementFontFamily) {
+    textTabElementFontFamily.addEventListener('change', (e) => {
+      const val = e.target.value;
+      if (state.selectedTextKey && renderer && renderer.textBounds && renderer.textBounds[state.selectedTextKey]) {
+        const tb = renderer.textBounds[state.selectedTextKey];
+        if (!state.config.widgetElementOffsets) state.config.widgetElementOffsets = {};
+        if (!state.config.widgetElementOffsets[tb.widgetKey]) state.config.widgetElementOffsets[tb.widgetKey] = {};
+        if (!state.config.widgetElementOffsets[tb.widgetKey][tb.partKey]) state.config.widgetElementOffsets[tb.widgetKey][tb.partKey] = { x: 0, y: 0, z: 1 };
+        state.config.widgetElementOffsets[tb.widgetKey][tb.partKey].fontFamily = val;
+        triggerRender();
+      }
+    });
+  }
+
 
 
 
@@ -32670,40 +32965,36 @@ function setupGizmoController() {
 
     if (!state.isInteractiveLayout) return;
 
-
-
-
-
-
-
     const rect = canvas.getBoundingClientRect();
-
-
-
     const scale = canvas.width / rect.width;
-
-
-
     const clickX = (clientX - rect.left) * scale;
-
-
-
     const clickY = (clientY - rect.top) * scale;
 
+    // 1. In Single Activity mode: Check text bounds FIRST for individual text selection!
+    let foundTextKey = null;
+    let minTextDist = Infinity;
+    const tBounds = renderer.textBounds || {};
+    for (const [key, tb] of Object.entries(tBounds).reverse()) {
+      const margin = 8;
+      if (clickX >= tb.x - margin && clickX <= tb.x + tb.w + margin &&
+          clickY >= tb.y - margin && clickY <= tb.y + tb.h + margin) {
+        const centerX = tb.x + tb.w / 2;
+        const centerY = tb.y + tb.h / 2;
+        const dist = Math.hypot(clickX - centerX, clickY - centerY);
+        if (dist < minTextDist) {
+          minTextDist = dist;
+          foundTextKey = key;
+        }
+      }
+    }
 
+    if (foundTextKey) {
+      selectSingleText(foundTextKey, clientX, clientY);
+      return;
+    }
 
-
-
-
-
-    // Check bounds in reverse order (topmost first)
-
-
-
+    // 2. Fall back to widget bounds:
     let foundKey = null;
-
-
-
     const bounds = renderer.widgetBounds || {};
 
 
@@ -32891,7 +33182,43 @@ function setupGizmoController() {
       }
 
       canvas.style.cursor = isHover ? 'move' : 'default';
+    } else {
+      if (isDraggingSingleText && activeDragTextKey) {
+        const rect = canvas.getBoundingClientRect();
+        const scale = canvas.width / rect.width;
+        const dx = (e.clientX - singleTextDragStart.x) * scale;
+        const dy = (e.clientY - singleTextDragStart.y) * scale;
+        const { widgetKey, partKey } = activeDragTextKey;
+        if (!state.config.widgetElementOffsets) state.config.widgetElementOffsets = {};
+        if (!state.config.widgetElementOffsets[widgetKey]) state.config.widgetElementOffsets[widgetKey] = {};
+        if (!state.config.widgetElementOffsets[widgetKey][partKey]) state.config.widgetElementOffsets[widgetKey][partKey] = { x: 0, y: 0, z: 1 };
+        const obj = state.config.widgetElementOffsets[widgetKey][partKey];
+        obj.x = Math.round(singleTextInitialOffset.x + dx);
+        obj.y = Math.round(singleTextInitialOffset.y + dy);
+        updateSubElementInspector(widgetKey, partKey);
+        triggerRender();
+        return;
+      }
 
+      if (!isDraggingWidget) {
+        const rect = canvas.getBoundingClientRect();
+        const scale = canvas.width / rect.width;
+        const mouseX = (e.clientX - rect.left) * scale;
+        const mouseY = (e.clientY - rect.top) * scale;
+        let isHover = false;
+        const tBounds = renderer.textBounds || {};
+        for (const [key, tb] of Object.entries(tBounds)) {
+          const margin = 6;
+          if (mouseX >= tb.x - margin && mouseX <= tb.x + tb.w + margin &&
+              mouseY >= tb.y - margin && mouseY <= tb.y + tb.h + margin) {
+            isHover = true;
+            break;
+          }
+        }
+        if (isHover) {
+          canvas.style.cursor = 'move';
+        }
+      }
     }
 
 
