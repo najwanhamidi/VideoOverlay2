@@ -777,6 +777,7 @@ let dragInitialRot = 0;
 
 
 let dragInitialPos = null;
+let dragInitialWidgetPositions = {};
 
 
 
@@ -2063,18 +2064,41 @@ function deleteSelectedTarget(targetKey = null) {
   pushUndoSnapshot();
 
   // 0. Check if an individual text element is selected in Single Activity mode
-  if (state.selectedTextKey && renderer && renderer.textBounds && renderer.textBounds[state.selectedTextKey]) {
-    const tb = renderer.textBounds[state.selectedTextKey];
+  const activeTextKeys = (state.selectedTextKeys && state.selectedTextKeys.length > 0)
+    ? state.selectedTextKeys
+    : (state.selectedTextKey ? [state.selectedTextKey] : []);
+  if (activeTextKeys.length > 0 && renderer && renderer.textBounds) {
     if (!state.config.widgetElementOffsets) state.config.widgetElementOffsets = {};
-    if (!state.config.widgetElementOffsets[tb.widgetKey]) state.config.widgetElementOffsets[tb.widgetKey] = {};
-    if (!state.config.widgetElementOffsets[tb.widgetKey][tb.partKey]) {
-      state.config.widgetElementOffsets[tb.widgetKey][tb.partKey] = { x: 0, y: 0, z: 1 };
+    for (const tKey of activeTextKeys) {
+      const tb = renderer.textBounds[tKey];
+      if (!tb) continue;
+      if (!state.config.widgetElementOffsets[tb.widgetKey]) state.config.widgetElementOffsets[tb.widgetKey] = {};
+      if (!state.config.widgetElementOffsets[tb.widgetKey][tb.partKey]) {
+        state.config.widgetElementOffsets[tb.widgetKey][tb.partKey] = { x: 0, y: 0, z: 1 };
+      }
+      state.config.widgetElementOffsets[tb.widgetKey][tb.partKey].hidden = true;
     }
-    state.config.widgetElementOffsets[tb.widgetKey][tb.partKey].hidden = true;
-    const lbl = tb.label || tb.partKey;
-    showToast(`Hidden "${lbl}"`);
+    showToast(`Hidden ${activeTextKeys.length} text elements`);
     state.selectedTextKey = null;
     state.selectedTextKeys = [];
+    triggerRender();
+    updateGizmoBox();
+    return;
+  }
+
+  // 0.5 Check if multiple widgets are selected
+  if (state.selectedWidgets && state.selectedWidgets.length > 1) {
+    for (const wKey of state.selectedWidgets) {
+      if (wKey.endsWith('_bg')) {
+        const baseKey = wKey.replace(/_bg$/, '');
+        window.setElementDeleted(baseKey, 'bg', true);
+      } else {
+        window.setElementDeleted(wKey, 'widget', true);
+      }
+    }
+    showToast(`Deleted ${state.selectedWidgets.length} selected items`);
+    state.selectedWidgets = [];
+    state.selectedWidget = null;
     triggerRender();
     updateGizmoBox();
     return;
@@ -2805,10 +2829,6 @@ function startSingleTextDrag(clientX, clientY, widgetKey, partKey) {
   dragStartX = clientX;
   dragStartY = clientY;
   activeDragTextKey = { widgetKey, partKey };
-  const off = (state.config.widgetElementOffsets && state.config.widgetElementOffsets[widgetKey] && state.config.widgetElementOffsets[widgetKey][partKey]) || { x: 0, y: 0 };
-  dragInitialPos = { x: typeof off.x === 'number' ? off.x : 0, y: typeof off.y === 'number' ? off.y : 0 };
-  singleTextDragStart = { x: clientX, y: clientY };
-  singleTextInitialOffset = { ...dragInitialPos };
 
   dragInitialTextOffsets = {};
   const activeKeys = (state.selectedTextKeys && state.selectedTextKeys.length > 0)
@@ -2822,10 +2842,67 @@ function startSingleTextDrag(clientX, clientY, widgetKey, partKey) {
     }
   }
 
+  const off = (state.config.widgetElementOffsets && state.config.widgetElementOffsets[widgetKey] && state.config.widgetElementOffsets[widgetKey][partKey]) || { x: 0, y: 0 };
+  dragInitialPos = { x: typeof off.x === 'number' ? off.x : 0, y: typeof off.y === 'number' ? off.y : 0 };
+  singleTextDragStart = { x: clientX, y: clientY };
+  singleTextInitialOffset = { ...dragInitialPos };
+
   pushUndoSnapshot();
 }
 
+function updateSubElementInspector(widgetKey, partKey) {
+  if (!widgetKey) return;
+  const insElSelect = document.getElementById('inspectorElementSelect');
+  if (insElSelect && widgetKey && insElSelect.value !== widgetKey) {
+    insElSelect.value = widgetKey;
+  }
+  const insSubSelect = document.getElementById('inspectorSubPartSelect');
+  if (insSubSelect && partKey && insSubSelect.value !== partKey) {
+    insSubSelect.value = partKey;
+  }
+  if (typeof window.syncInspectorWithSelectedElement === 'function') {
+    window.syncInspectorWithSelectedElement(widgetKey, partKey);
+  }
+}
+window.updateSubElementInspector = updateSubElementInspector;
+
+function updateActiveTexts(mutator) {
+  const activeKeys = (state.selectedTextKeys && state.selectedTextKeys.length > 0)
+    ? state.selectedTextKeys
+    : (state.selectedTextKey ? [state.selectedTextKey] : []);
+  if (!activeKeys || activeKeys.length === 0) return;
+  if (!state.config.widgetElementOffsets) state.config.widgetElementOffsets = {};
+  for (const k of activeKeys) {
+    const tb = renderer && renderer.textBounds && renderer.textBounds[k];
+    if (!tb) continue;
+    if (!state.config.widgetElementOffsets[tb.widgetKey]) state.config.widgetElementOffsets[tb.widgetKey] = {};
+    if (!state.config.widgetElementOffsets[tb.widgetKey][tb.partKey]) {
+      state.config.widgetElementOffsets[tb.widgetKey][tb.partKey] = { x: 0, y: 0, z: 1 };
+    }
+    mutator(state.config.widgetElementOffsets[tb.widgetKey][tb.partKey], tb);
+  }
+  triggerRender();
+  if (state.selectedTextKey) {
+    syncTextTabEditor(state.selectedTextKey);
+    syncGizmoTextToolbar();
+    const mainTb = renderer.textBounds && renderer.textBounds[state.selectedTextKey];
+    if (mainTb) {
+      updateSubElementInspector(mainTb.widgetKey, mainTb.partKey);
+    }
+  }
+  updateGizmoBox();
+}
+window.updateActiveTexts = updateActiveTexts;
+
 function selectSingleText(textKey, clientX = null, clientY = null, isMulti = false) {
+  if (!textKey) {
+    state.selectedTextKey = null;
+    state.selectedTextKeys = [];
+    triggerRender();
+    updateGizmoBox();
+    syncGizmoTextToolbar();
+    return;
+  }
   if (!renderer || !renderer.textBounds || !renderer.textBounds[textKey]) return;
   const tb = renderer.textBounds[textKey];
 
@@ -2843,6 +2920,8 @@ function selectSingleText(textKey, clientX = null, clientY = null, isMulti = fal
     state.selectedTextKey = textKey;
   }
 
+  // Clear widget multi-selection
+  state.selectedWidgets = [];
   state.selectedWidget = tb.widgetKey;
   state.selectedWidgetKey = tb.widgetKey;
   state.selectedSubPartKey = tb.partKey;
@@ -2852,11 +2931,9 @@ function selectSingleText(textKey, clientX = null, clientY = null, isMulti = fal
     populateGizmoSubPartDropdown(tb.widgetKey, tb.partKey);
   }
 
-  if (typeof updateSubElementInspector === 'function') {
-    updateSubElementInspector(tb.widgetKey, tb.partKey);
-  }
-
+  updateSubElementInspector(tb.widgetKey, tb.partKey);
   syncTextTabEditor(textKey);
+  syncGizmoTextToolbar();
 
   if (clientX !== null && clientY !== null) {
     startSingleTextDrag(clientX, clientY, tb.widgetKey, tb.partKey);
@@ -2866,7 +2943,6 @@ function selectSingleText(textKey, clientX = null, clientY = null, isMulti = fal
   updateGizmoBox();
 }
 window.selectSingleText = selectSingleText;
-window.syncTextTabEditor = syncTextTabEditor;
 
 function syncTextTabEditor(textKey) {
   const elSelect = document.getElementById('textTabElementSelect');
@@ -2878,6 +2954,16 @@ function syncTextTabEditor(textKey) {
   const colorInput = document.getElementById('textTabElementColorInput');
   const colorHex = document.getElementById('textTabElementColorHex');
   const fontFamSelect = document.getElementById('textTabElementFontFamily');
+  const fontWeightSelect = document.getElementById('textTabElementFontWeight');
+  const transformSelect = document.getElementById('textTabElementTransform');
+  const shadowToggle = document.getElementById('textTabElementShadowToggle');
+  const shadowColor = document.getElementById('textTabElementShadowColor');
+  const shadowBlur = document.getElementById('textTabElementShadowBlur');
+  const outlineToggle = document.getElementById('textTabElementOutlineToggle');
+  const outlineColor = document.getElementById('textTabElementOutlineColor');
+  const outlineWidth = document.getElementById('textTabElementOutlineWidth');
+  const editorBody = document.getElementById('textTabElementEditorBody');
+  const badge = document.getElementById('textTabSelectedElementBadge');
 
   if (!renderer || !renderer.textBounds) return;
 
@@ -2893,8 +2979,30 @@ function syncTextTabEditor(textKey) {
     if (textKey) elSelect.value = textKey;
   }
 
-  if (!textKey || !renderer.textBounds[textKey]) return;
-  const tb = renderer.textBounds[textKey];
+  const activeKeys = (state.selectedTextKeys && state.selectedTextKeys.length > 0)
+    ? state.selectedTextKeys
+    : (textKey ? [textKey] : []);
+
+  if (activeKeys.length === 0 || !renderer.textBounds[textKey || activeKeys[0]]) {
+    if (editorBody) editorBody.style.display = 'none';
+    if (badge) badge.textContent = 'Click any text';
+    return;
+  }
+
+  if (editorBody) editorBody.style.display = 'block';
+
+  if (badge) {
+    if (activeKeys.length > 1) {
+      badge.textContent = `📍 ${activeKeys.length} Texts Selected (Bulk Edit)`;
+    } else {
+      const singleTb = renderer.textBounds[textKey || activeKeys[0]];
+      badge.textContent = singleTb?.label || singleTb?.partKey || textKey;
+    }
+  }
+
+  const mainKey = textKey || activeKeys[0];
+  const tb = renderer.textBounds[mainKey];
+  if (!tb) return;
   const off = (state.config.widgetElementOffsets && state.config.widgetElementOffsets[tb.widgetKey] && state.config.widgetElementOffsets[tb.widgetKey][tb.partKey]) || {};
 
   if (textInput) {
@@ -2918,8 +3026,84 @@ function syncTextTabEditor(textKey) {
   if (fontFamSelect) {
     fontFamSelect.value = off.fontFamily || 'default';
   }
+  if (fontWeightSelect) {
+    fontWeightSelect.value = off.fontWeight || 'default';
+  }
+  if (transformSelect) {
+    transformSelect.value = off.textTransform || 'none';
+  }
+  if (shadowToggle) {
+    shadowToggle.checked = off.shadowToggle === true;
+  }
+  if (shadowColor) {
+    shadowColor.value = off.shadowColor || '#000000';
+  }
+  if (shadowBlur) {
+    shadowBlur.value = typeof off.shadowBlur === 'number' ? off.shadowBlur : 8;
+  }
+  if (outlineToggle) {
+    outlineToggle.checked = off.outlineToggle === true;
+  }
+  if (outlineColor) {
+    outlineColor.value = off.outlineColor || '#000000';
+  }
+  if (outlineWidth) {
+    outlineWidth.value = typeof off.outlineWidth === 'number' ? off.outlineWidth : 2;
+  }
 }
+window.syncTextTabEditor = syncTextTabEditor;
 
+function syncGizmoTextToolbar() {
+  const tbToolbar = document.getElementById('gizmoTextToolbar');
+  if (!tbToolbar) return;
+  const activeKeys = (state.selectedTextKeys && state.selectedTextKeys.length > 0)
+    ? state.selectedTextKeys
+    : (state.selectedTextKey ? [state.selectedTextKey] : []);
+  if (!activeKeys || activeKeys.length === 0) {
+    tbToolbar.style.display = 'none';
+    return;
+  }
+  tbToolbar.style.display = 'flex';
+  const mainKey = activeKeys[0];
+  const tb = renderer && renderer.textBounds && renderer.textBounds[mainKey];
+  if (!tb) return;
+  const off = (state.config.widgetElementOffsets && state.config.widgetElementOffsets[tb.widgetKey] && state.config.widgetElementOffsets[tb.widgetKey][tb.partKey]) || {};
+
+  const gInput = document.getElementById('gizmoTextInput');
+  if (gInput) {
+    gInput.value = off.text !== undefined ? off.text : (tb.text || '');
+  }
+  const gFont = document.getElementById('gizmoFontFamily');
+  if (gFont) {
+    gFont.value = off.fontFamily || 'default';
+  }
+  const gWeight = document.getElementById('gizmoFontWeight');
+  if (gWeight) {
+    gWeight.value = off.fontWeight || 'default';
+  }
+  const gSizeDisplay = document.getElementById('gizmoSizeDisplay');
+  if (gSizeDisplay) {
+    const s = typeof off.scale === 'number' && !isNaN(off.scale) ? off.scale : 100;
+    gSizeDisplay.textContent = `${s}%`;
+  }
+  const gColor = document.getElementById('gizmoColorInput');
+  const gHex = document.getElementById('gizmoColorHex');
+  const c = (off.color && off.color !== 'default') ? off.color : (tb.color || '#ffffff');
+  if (gColor && c.startsWith('#') && (c.length === 7 || c.length === 4)) gColor.value = c;
+  if (gHex) gHex.value = c;
+
+  const gShadow = document.getElementById('gizmoShadowToggleBtn');
+  if (gShadow) {
+    if (off.shadowToggle) gShadow.classList.add('active');
+    else gShadow.classList.remove('active');
+  }
+  const gOutline = document.getElementById('gizmoOutlineToggleBtn');
+  if (gOutline) {
+    if (off.outlineToggle) gOutline.classList.add('active');
+    else gOutline.classList.remove('active');
+  }
+}
+window.syncGizmoTextToolbar = syncGizmoTextToolbar;
 
 function setupKeyboardShortcuts() {
 
@@ -3165,6 +3349,47 @@ function setupKeyboardShortcuts() {
         return;
       }
 
+      // 2.5 Multi-Widget Selection Move (Single Activity):
+      if (state.selectedWidgets && state.selectedWidgets.length > 1) {
+        if (!arrowKeyUndoTimer) pushUndoSnapshot();
+        clearTimeout(arrowKeyUndoTimer);
+        arrowKeyUndoTimer = setTimeout(() => { arrowKeyUndoTimer = null; }, 400);
+
+        if (!state.config.widgetPositions) state.config.widgetPositions = {};
+        for (const wKey of state.selectedWidgets) {
+          if (wKey.endsWith('_bg')) {
+            const baseKey = wKey.replace(/_bg$/, '');
+            if (!state.config.widgetBgStyles) state.config.widgetBgStyles = {};
+            if (!state.config.widgetBgStyles[baseKey]) state.config.widgetBgStyles[baseKey] = {};
+            const bg = state.config.widgetBgStyles[baseKey];
+            bg.offsetX = (bg.offsetX || 0) + dx * step;
+            bg.offsetY = (bg.offsetY || 0) + dy * step;
+          } else {
+            const wb = renderer.widgetBounds[wKey];
+            if (wb) {
+              if (!state.config.widgetPositions[wKey]) {
+                state.config.widgetPositions[wKey] = { x: wb.x, y: wb.y, width: wb.width, height: wb.height };
+              }
+              const wp = state.config.widgetPositions[wKey];
+              wp.x = (typeof wp.x === 'number' ? wp.x : wb.x) + dx * step;
+              wp.y = (typeof wp.y === 'number' ? wp.y : wb.y) + dy * step;
+
+              if (state.config.customTexts && Array.isArray(state.config.customTexts)) {
+                const ct = state.config.customTexts.find(t => t.id === wKey);
+                if (ct) { ct.x = wp.x; ct.y = wp.y; }
+              }
+              if (state.config.customShapes && Array.isArray(state.config.customShapes)) {
+                const cs = state.config.customShapes.find(s => s.id === wKey);
+                if (cs) { cs.x = wp.x; cs.y = wp.y; }
+              }
+            }
+          }
+        }
+        triggerRender();
+        updateGizmoBox();
+        return;
+      }
+
       // 3. Single Activity mode - Sub-part or Border selected:
       if (state.selectedWidget) {
         const subPartSelect = document.getElementById('gizmoSubPartSelect') || document.getElementById('inspectorSubPartSelect');
@@ -3214,39 +3439,45 @@ function setupKeyboardShortcuts() {
           updateGizmoBox();
           return;
         } else {
-          // 4. Whole Widget move:
-          if (!arrowKeyUndoTimer) pushUndoSnapshot();
-          clearTimeout(arrowKeyUndoTimer);
-          arrowKeyUndoTimer = setTimeout(() => { arrowKeyUndoTimer = null; }, 400);
+          // 4. Multiple / Single Widgets move:
+          const activeWidgets = (state.selectedWidgets && state.selectedWidgets.length > 0)
+            ? state.selectedWidgets
+            : (state.selectedWidget ? [state.selectedWidget] : []);
 
           if (!state.config.widgetPositions) state.config.widgetPositions = {};
-          const b = renderer.widgetBounds[state.selectedWidget];
-          if (b) {
-            if (!state.config.widgetPositions[state.selectedWidget]) {
-              state.config.widgetPositions[state.selectedWidget] = { x: b.x, y: b.y, width: b.width, height: b.height };
-            }
-            const wp = state.config.widgetPositions[state.selectedWidget];
-            wp.x = (typeof wp.x === 'number' ? wp.x : b.x) + dx * step;
-            wp.y = (typeof wp.y === 'number' ? wp.y : b.y) + dy * step;
 
-            if (state.config.customTexts && Array.isArray(state.config.customTexts)) {
-              const ct = state.config.customTexts.find(t => t.id === state.selectedWidget);
-              if (ct) {
-                ct.x = wp.x;
-                ct.y = wp.y;
+          for (const wKey of activeWidgets) {
+            if (wKey.endsWith('_bg')) {
+              const baseKey = wKey.replace(/_bg$/, '');
+              if (!state.config.widgetBgStyles) state.config.widgetBgStyles = {};
+              if (!state.config.widgetBgStyles[baseKey]) state.config.widgetBgStyles[baseKey] = {};
+              const bg = state.config.widgetBgStyles[baseKey];
+              bg.offsetX = (bg.offsetX || 0) + dx * step;
+              bg.offsetY = (bg.offsetY || 0) + dy * step;
+            } else {
+              const wb = renderer.widgetBounds[wKey];
+              if (wb) {
+                if (!state.config.widgetPositions[wKey]) {
+                  state.config.widgetPositions[wKey] = { x: wb.x, y: wb.y, width: wb.width, height: wb.height };
+                }
+                const wp = state.config.widgetPositions[wKey];
+                wp.x = (typeof wp.x === 'number' ? wp.x : wb.x) + dx * step;
+                wp.y = (typeof wp.y === 'number' ? wp.y : wb.y) + dy * step;
+
+                if (state.config.customTexts && Array.isArray(state.config.customTexts)) {
+                  const ct = state.config.customTexts.find(t => t.id === wKey);
+                  if (ct) { ct.x = wp.x; ct.y = wp.y; }
+                }
+                if (state.config.customShapes && Array.isArray(state.config.customShapes)) {
+                  const cs = state.config.customShapes.find(s => s.id === wKey);
+                  if (cs) { cs.x = wp.x; cs.y = wp.y; }
+                }
               }
             }
-            if (state.config.customShapes && Array.isArray(state.config.customShapes)) {
-              const cs = state.config.customShapes.find(s => s.id === state.selectedWidget);
-              if (cs) {
-                cs.x = wp.x;
-                cs.y = wp.y;
-              }
-            }
-            triggerRender();
-            updateGizmoBox();
-            return;
           }
+          triggerRender();
+          updateGizmoBox();
+          return;
         }
       }
     }
@@ -22436,33 +22667,32 @@ function setupElementInspectorControls() {
 
 
   const getSubElemObj = () => {
-
-
-
     const key = getActiveKey();
-
-
-
     const part = subPartSelect ? subPartSelect.value : 'widget';
-
-
-
     if (!state.config.widgetElementOffsets) state.config.widgetElementOffsets = {};
-
-
-
     if (!state.config.widgetElementOffsets[key]) state.config.widgetElementOffsets[key] = {};
-
-
-
     if (!state.config.widgetElementOffsets[key][part]) state.config.widgetElementOffsets[key][part] = { x: 0, y: 0, z: 1 };
-
-
-
     return state.config.widgetElementOffsets[key][part];
+  };
 
-
-
+  const mutateSubElemObjs = (mutator) => {
+    const activeKeys = (state.selectedTextKeys && state.selectedTextKeys.length > 0)
+      ? state.selectedTextKeys
+      : (state.selectedTextKey ? [state.selectedTextKey] : []);
+    if (activeKeys.length > 0) {
+      if (!state.config.widgetElementOffsets) state.config.widgetElementOffsets = {};
+      for (const k of activeKeys) {
+        const tb = renderer && renderer.textBounds && renderer.textBounds[k];
+        if (!tb) continue;
+        if (!state.config.widgetElementOffsets[tb.widgetKey]) state.config.widgetElementOffsets[tb.widgetKey] = {};
+        if (!state.config.widgetElementOffsets[tb.widgetKey][tb.partKey]) {
+          state.config.widgetElementOffsets[tb.widgetKey][tb.partKey] = { x: 0, y: 0, z: 1 };
+        }
+        mutator(state.config.widgetElementOffsets[tb.widgetKey][tb.partKey]);
+      }
+    } else {
+      mutator(getSubElemObj());
+    }
   };
 
 
@@ -29567,7 +29797,7 @@ function setupElementInspectorControls() {
 
 
 
-      getSubElemObj().fontFamily = e.target.value;
+      mutateSubElemObjs((o) => { o.fontFamily = e.target.value; });
 
 
 
@@ -29607,7 +29837,7 @@ function setupElementInspectorControls() {
 
 
 
-      getSubElemObj().scale = val;
+      mutateSubElemObjs((o) => { o.scale = val; });
 
 
 
@@ -29651,7 +29881,7 @@ function setupElementInspectorControls() {
 
 
 
-      getSubElemObj().scale = val;
+      mutateSubElemObjs((o) => { o.scale = val; });
 
 
 
@@ -29685,7 +29915,7 @@ function setupElementInspectorControls() {
     subElemSpacingSlider.addEventListener('input', (e) => {
       const val = parseFloat(e.target.value) || 0;
       if (subElemSpacingInput) subElemSpacingInput.value = val;
-      getSubElemObj().letterSpacing = val;
+      mutateSubElemObjs((o) => { o.letterSpacing = val; });
       triggerRender();
     });
   }
@@ -29693,19 +29923,19 @@ function setupElementInspectorControls() {
     subElemSpacingInput.addEventListener('input', (e) => {
       const val = parseFloat(e.target.value) || 0;
       if (subElemSpacingSlider) subElemSpacingSlider.value = val;
-      getSubElemObj().letterSpacing = val;
+      mutateSubElemObjs((o) => { o.letterSpacing = val; });
       triggerRender();
     });
   }
   if (subElemFontWeight) {
     subElemFontWeight.addEventListener('change', (e) => {
-      getSubElemObj().fontWeight = e.target.value;
+      mutateSubElemObjs((o) => { o.fontWeight = e.target.value; });
       triggerRender();
     });
   }
   if (subElemOutlineToggle) {
     subElemOutlineToggle.addEventListener('change', (e) => {
-      getSubElemObj().outlineToggle = e.target.checked;
+      mutateSubElemObjs((o) => { o.outlineToggle = e.target.checked; });
       triggerRender();
     });
   }
@@ -29723,7 +29953,7 @@ function setupElementInspectorControls() {
   }
   if (subElemShadowToggle) {
     subElemShadowToggle.addEventListener('change', (e) => {
-      getSubElemObj().shadowToggle = e.target.checked;
+      mutateSubElemObjs((o) => { o.shadowToggle = e.target.checked; });
       triggerRender();
     });
   }
@@ -29863,7 +30093,7 @@ function setupElementInspectorControls() {
 
 
 
-      getSubElemObj().color = val;
+      mutateSubElemObjs((o) => { o.color = val; });
 
 
 
@@ -30703,7 +30933,110 @@ function setupElementInspectorControls() {
 
 
 
+function setupGizmoTextToolbarControls() {
+  const gInput = document.getElementById('gizmoTextInput');
+  if (gInput) {
+    gInput.addEventListener('input', (e) => {
+      const val = e.target.value;
+      updateActiveTexts((off) => { off.text = val; });
+    });
+  }
+  const gFont = document.getElementById('gizmoFontFamily');
+  if (gFont) {
+    gFont.addEventListener('change', (e) => {
+      const val = e.target.value;
+      updateActiveTexts((off) => { off.fontFamily = val; });
+    });
+  }
+  const gWeight = document.getElementById('gizmoFontWeight');
+  if (gWeight) {
+    gWeight.addEventListener('change', (e) => {
+      const val = e.target.value;
+      updateActiveTexts((off) => { off.fontWeight = val; });
+    });
+  }
+  const gDown = document.getElementById('gizmoSizeDownBtn');
+  if (gDown) {
+    gDown.addEventListener('click', (e) => {
+      e.stopPropagation();
+      updateActiveTexts((off) => {
+        const cur = typeof off.scale === 'number' && !isNaN(off.scale) ? off.scale : 100;
+        off.scale = Math.max(30, cur - 5);
+      });
+    });
+  }
+  const gUp = document.getElementById('gizmoSizeUpBtn');
+  if (gUp) {
+    gUp.addEventListener('click', (e) => {
+      e.stopPropagation();
+      updateActiveTexts((off) => {
+        const cur = typeof off.scale === 'number' && !isNaN(off.scale) ? off.scale : 100;
+        off.scale = Math.min(300, cur + 5);
+      });
+    });
+  }
+  const gColor = document.getElementById('gizmoColorInput');
+  if (gColor) {
+    gColor.addEventListener('input', (e) => {
+      const val = e.target.value;
+      const gHex = document.getElementById('gizmoColorHex');
+      if (gHex) gHex.value = val;
+      updateActiveTexts((off) => { off.color = val; });
+    });
+  }
+  const gHex = document.getElementById('gizmoColorHex');
+  if (gHex) {
+    gHex.addEventListener('input', (e) => {
+      const val = e.target.value.trim();
+      if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(val)) {
+        if (gColor) gColor.value = val;
+        updateActiveTexts((off) => { off.color = val; });
+      }
+    });
+  }
+  const gShadow = document.getElementById('gizmoShadowToggleBtn');
+  if (gShadow) {
+    gShadow.addEventListener('click', (e) => {
+      e.stopPropagation();
+      let nextState = false;
+      const mainKey = state.selectedTextKey || (state.selectedTextKeys && state.selectedTextKeys[0]);
+      if (mainKey && renderer && renderer.textBounds && renderer.textBounds[mainKey]) {
+        const tb = renderer.textBounds[mainKey];
+        const off = state.config.widgetElementOffsets?.[tb.widgetKey]?.[tb.partKey];
+        nextState = !(off && off.shadowToggle);
+      }
+      updateActiveTexts((off) => {
+        off.shadowToggle = nextState;
+        if (!off.shadowColor) off.shadowColor = '#000000';
+        if (off.shadowBlur === undefined) off.shadowBlur = 8;
+        if (off.shadowOffsetY === undefined) off.shadowOffsetY = 3;
+      });
+    });
+  }
+  const gOutline = document.getElementById('gizmoOutlineToggleBtn');
+  if (gOutline) {
+    gOutline.addEventListener('click', (e) => {
+      e.stopPropagation();
+      let nextState = false;
+      const mainKey = state.selectedTextKey || (state.selectedTextKeys && state.selectedTextKeys[0]);
+      if (mainKey && renderer && renderer.textBounds && renderer.textBounds[mainKey]) {
+        const tb = renderer.textBounds[mainKey];
+        const off = state.config.widgetElementOffsets?.[tb.widgetKey]?.[tb.partKey];
+        nextState = !(off && off.outlineToggle);
+      }
+      updateActiveTexts((off) => {
+        off.outlineToggle = nextState;
+        if (!off.outlineColor) off.outlineColor = '#000000';
+        if (off.outlineWidth === undefined) off.outlineWidth = 2;
+      });
+    });
+  }
+}
+window.setupGizmoTextToolbarControls = setupGizmoTextToolbarControls;
+
 function setupTextAndStickersControls() {
+  setupGizmoTextToolbarControls();
+
   // Wire Top Selected Text on Canvas Editor
   const textTabElementSelect = document.getElementById('textTabElementSelect');
   const textTabElementTextInput = document.getElementById('textTabElementTextInput');
@@ -30714,6 +31047,14 @@ function setupTextAndStickersControls() {
   const textTabElementColorInput = document.getElementById('textTabElementColorInput');
   const textTabElementColorHex = document.getElementById('textTabElementColorHex');
   const textTabElementFontFamily = document.getElementById('textTabElementFontFamily');
+  const textTabElementFontWeight = document.getElementById('textTabElementFontWeight');
+  const textTabElementTransform = document.getElementById('textTabElementTransform');
+  const textTabElementShadowToggle = document.getElementById('textTabElementShadowToggle');
+  const textTabElementShadowBlur = document.getElementById('textTabElementShadowBlur');
+  const textTabElementShadowColor = document.getElementById('textTabElementShadowColor');
+  const textTabElementOutlineToggle = document.getElementById('textTabElementOutlineToggle');
+  const textTabElementOutlineWidth = document.getElementById('textTabElementOutlineWidth');
+  const textTabElementOutlineColor = document.getElementById('textTabElementOutlineColor');
 
   if (textTabElementSelect) {
     textTabElementSelect.addEventListener('change', (e) => {
@@ -30724,60 +31065,28 @@ function setupTextAndStickersControls() {
   if (textTabElementTextInput) {
     textTabElementTextInput.addEventListener('input', (e) => {
       const val = e.target.value;
-      if (state.selectedTextKey && renderer && renderer.textBounds && renderer.textBounds[state.selectedTextKey]) {
-        const tb = renderer.textBounds[state.selectedTextKey];
-        if (!state.config.widgetElementOffsets) state.config.widgetElementOffsets = {};
-        if (!state.config.widgetElementOffsets[tb.widgetKey]) state.config.widgetElementOffsets[tb.widgetKey] = {};
-        if (!state.config.widgetElementOffsets[tb.widgetKey][tb.partKey]) state.config.widgetElementOffsets[tb.widgetKey][tb.partKey] = { x: 0, y: 0, z: 1 };
-        state.config.widgetElementOffsets[tb.widgetKey][tb.partKey].text = val;
-        triggerRender();
-      }
+      updateActiveTexts((off) => { off.text = val; });
     });
   }
   if (textTabElementSizeSlider) {
     textTabElementSizeSlider.addEventListener('input', (e) => {
       const val = parseInt(e.target.value, 10) || 100;
       if (textTabElementSizeVal) textTabElementSizeVal.textContent = `${val}%`;
-      if (state.selectedTextKey && renderer && renderer.textBounds && renderer.textBounds[state.selectedTextKey]) {
-        const tb = renderer.textBounds[state.selectedTextKey];
-        if (!state.config.widgetElementOffsets) state.config.widgetElementOffsets = {};
-        if (!state.config.widgetElementOffsets[tb.widgetKey]) state.config.widgetElementOffsets[tb.widgetKey] = {};
-        if (!state.config.widgetElementOffsets[tb.widgetKey][tb.partKey]) state.config.widgetElementOffsets[tb.widgetKey][tb.partKey] = { x: 0, y: 0, z: 1 };
-        state.config.widgetElementOffsets[tb.widgetKey][tb.partKey].scale = val;
-        triggerRender();
-      }
+      updateActiveTexts((off) => { off.scale = val; });
     });
   }
   if (textTabElementSpacingSlider) {
     textTabElementSpacingSlider.addEventListener('input', (e) => {
       const val = parseFloat(e.target.value) || 0;
       if (textTabElementSpacingVal) textTabElementSpacingVal.textContent = `${val}px`;
-      if (state.selectedTextKey && renderer && renderer.textBounds && renderer.textBounds[state.selectedTextKey]) {
-        const tb = renderer.textBounds[state.selectedTextKey];
-        if (!state.config.widgetElementOffsets) state.config.widgetElementOffsets = {};
-        if (!state.config.widgetElementOffsets[tb.widgetKey]) state.config.widgetElementOffsets[tb.widgetKey] = {};
-        if (!state.config.widgetElementOffsets[tb.widgetKey][tb.partKey]) state.config.widgetElementOffsets[tb.widgetKey][tb.partKey] = { x: 0, y: 0, z: 1 };
-        state.config.widgetElementOffsets[tb.widgetKey][tb.partKey].letterSpacing = val;
-        triggerRender();
-      }
+      updateActiveTexts((off) => { off.letterSpacing = val; });
     });
   }
   if (textTabElementColorInput) {
     textTabElementColorInput.addEventListener('input', (e) => {
       const val = e.target.value;
       if (textTabElementColorHex) textTabElementColorHex.value = val;
-      const activeKeys = (state.selectedTextKeys && state.selectedTextKeys.length > 0)
-        ? state.selectedTextKeys
-        : (state.selectedTextKey ? [state.selectedTextKey] : []);
-      if (!state.config.widgetElementOffsets) state.config.widgetElementOffsets = {};
-      for (const k of activeKeys) {
-        const tb = renderer && renderer.textBounds && renderer.textBounds[k];
-        if (!tb) continue;
-        if (!state.config.widgetElementOffsets[tb.widgetKey]) state.config.widgetElementOffsets[tb.widgetKey] = {};
-        if (!state.config.widgetElementOffsets[tb.widgetKey][tb.partKey]) state.config.widgetElementOffsets[tb.widgetKey][tb.partKey] = { x: 0, y: 0, z: 1 };
-        state.config.widgetElementOffsets[tb.widgetKey][tb.partKey].color = val;
-      }
-      triggerRender();
+      updateActiveTexts((off) => { off.color = val; });
     });
   }
   if (textTabElementColorHex) {
@@ -30785,37 +31094,109 @@ function setupTextAndStickersControls() {
       const val = e.target.value.trim();
       if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(val)) {
         if (textTabElementColorInput) textTabElementColorInput.value = val;
-        const activeKeys = (state.selectedTextKeys && state.selectedTextKeys.length > 0)
-          ? state.selectedTextKeys
-          : (state.selectedTextKey ? [state.selectedTextKey] : []);
-        if (!state.config.widgetElementOffsets) state.config.widgetElementOffsets = {};
-        for (const k of activeKeys) {
-          const tb = renderer && renderer.textBounds && renderer.textBounds[k];
-          if (!tb) continue;
-          if (!state.config.widgetElementOffsets[tb.widgetKey]) state.config.widgetElementOffsets[tb.widgetKey] = {};
-          if (!state.config.widgetElementOffsets[tb.widgetKey][tb.partKey]) state.config.widgetElementOffsets[tb.widgetKey][tb.partKey] = { x: 0, y: 0, z: 1 };
-          state.config.widgetElementOffsets[tb.widgetKey][tb.partKey].color = val;
-        }
-        triggerRender();
+        updateActiveTexts((off) => { off.color = val; });
       }
     });
   }
   if (textTabElementFontFamily) {
     textTabElementFontFamily.addEventListener('change', (e) => {
       const val = e.target.value;
-      if (state.selectedTextKey && renderer && renderer.textBounds && renderer.textBounds[state.selectedTextKey]) {
-        const tb = renderer.textBounds[state.selectedTextKey];
-        if (!state.config.widgetElementOffsets) state.config.widgetElementOffsets = {};
-        if (!state.config.widgetElementOffsets[tb.widgetKey]) state.config.widgetElementOffsets[tb.widgetKey] = {};
-        if (!state.config.widgetElementOffsets[tb.widgetKey][tb.partKey]) state.config.widgetElementOffsets[tb.widgetKey][tb.partKey] = { x: 0, y: 0, z: 1 };
-        state.config.widgetElementOffsets[tb.widgetKey][tb.partKey].fontFamily = val;
-        triggerRender();
-      }
+      updateActiveTexts((off) => { off.fontFamily = val; });
+    });
+  }
+  if (textTabElementFontWeight) {
+    textTabElementFontWeight.addEventListener('change', (e) => {
+      const val = e.target.value;
+      updateActiveTexts((off) => { off.fontWeight = val; });
+    });
+  }
+  if (textTabElementTransform) {
+    textTabElementTransform.addEventListener('change', (e) => {
+      const val = e.target.value;
+      updateActiveTexts((off, tb) => {
+        off.textTransform = val;
+        if (val === 'uppercase') off.text = (off.text || tb.text || '').toUpperCase();
+        else if (val === 'lowercase') off.text = (off.text || tb.text || '').toLowerCase();
+        else if (val === 'capitalize') off.text = (off.text || tb.text || '').replace(/[a-z]/i, l => l.toUpperCase());
+      });
+    });
+  }
+  if (textTabElementShadowToggle) {
+    textTabElementShadowToggle.addEventListener('change', (e) => {
+      const val = e.target.checked;
+      updateActiveTexts((off) => {
+        off.shadowToggle = val;
+        if (!off.shadowColor) off.shadowColor = '#000000';
+      });
+    });
+  }
+  if (textTabElementShadowColor) {
+    textTabElementShadowColor.addEventListener('input', (e) => {
+      const val = e.target.value;
+      updateActiveTexts((off) => { off.shadowColor = val; });
+    });
+  }
+  if (textTabElementShadowBlur) {
+    textTabElementShadowBlur.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value) || 0;
+      updateActiveTexts((off) => { off.shadowBlur = val; });
+    });
+  }
+  if (textTabElementOutlineToggle) {
+    textTabElementOutlineToggle.addEventListener('change', (e) => {
+      const val = e.target.checked;
+      updateActiveTexts((off) => {
+        off.outlineToggle = val;
+        if (!off.outlineColor) off.outlineColor = '#000000';
+      });
+    });
+  }
+  if (textTabElementOutlineColor) {
+    textTabElementOutlineColor.addEventListener('input', (e) => {
+      const val = e.target.value;
+      updateActiveTexts((off) => { off.outlineColor = val; });
+    });
+  }
+  if (textTabElementOutlineWidth) {
+    textTabElementOutlineWidth.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value) || 0;
+      updateActiveTexts((off) => { off.outlineWidth = val; });
     });
   }
 
+  // Nudge buttons
+  const nudgeLeft = document.getElementById('textTabNudgeLeftBtn');
+  const nudgeRight = document.getElementById('textTabNudgeRightBtn');
+  const nudgeUp = document.getElementById('textTabNudgeUpBtn');
+  const nudgeDown = document.getElementById('textTabNudgeDownBtn');
+  if (nudgeLeft) nudgeLeft.addEventListener('click', () => updateActiveTexts((o) => { o.x = (o.x || 0) - 2; }));
+  if (nudgeRight) nudgeRight.addEventListener('click', () => updateActiveTexts((o) => { o.x = (o.x || 0) + 2; }));
+  if (nudgeUp) nudgeUp.addEventListener('click', () => updateActiveTexts((o) => { o.y = (o.y || 0) - 2; }));
+  if (nudgeDown) nudgeDown.addEventListener('click', () => updateActiveTexts((o) => { o.y = (o.y || 0) + 2; }));
 
-
+  const resetBtn = document.getElementById('textTabResetElementBtn');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      updateActiveTexts((o) => {
+        delete o.scale;
+        delete o.color;
+        delete o.fontFamily;
+        delete o.fontWeight;
+        delete o.letterSpacing;
+        delete o.shadowToggle;
+        delete o.shadowColor;
+        delete o.shadowBlur;
+        delete o.outlineToggle;
+        delete o.outlineColor;
+        delete o.outlineWidth;
+        delete o.text;
+        delete o.textTransform;
+        o.x = 0;
+        o.y = 0;
+      });
+      showToast('Reset styles for selected text(s)');
+    });
+  }
 
   // 1. Overlay Labels Synchronization
 
@@ -32440,99 +32821,148 @@ function setupGizmoController() {
 
 
 
-  const handlePointerDown = (clientX, clientY) => {
+  let isDraggingSingleMarquee = false;
+let singleMarqueeStart = { x: 0, y: 0 };
 
+function startSingleActivityMarquee(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  const scale = canvas.width / rect.width;
+  isDraggingSingleMarquee = true;
+  singleMarqueeStart = {
+    x: (clientX - rect.left) * scale,
+    y: (clientY - rect.top) * scale
+  };
+  renderer.singleActivityMarqueeBox = { x: singleMarqueeStart.x, y: singleMarqueeStart.y, w: 0, h: 0 };
 
+  const onMove = (e) => {
+    if (!isDraggingSingleMarquee) return;
+    const curX = (e.clientX - rect.left) * scale;
+    const curY = (e.clientY - rect.top) * scale;
+    const mx = Math.min(singleMarqueeStart.x, curX);
+    const my = Math.min(singleMarqueeStart.y, curY);
+    const mw = Math.abs(curX - singleMarqueeStart.x);
+    const mh = Math.abs(curY - singleMarqueeStart.y);
+    renderer.singleActivityMarqueeBox = { x: mx, y: my, w: mw, h: mh };
+    triggerRender();
+  };
 
+  const onUp = (e) => {
+    window.removeEventListener('mousemove', onMove);
+    window.removeEventListener('mouseup', onUp);
+    if (!isDraggingSingleMarquee) return;
+    isDraggingSingleMarquee = false;
+    const mb = renderer.singleActivityMarqueeBox;
+    renderer.singleActivityMarqueeBox = null;
+
+    if (mb && (mb.w > 6 || mb.h > 6)) {
+      // Find texts inside marquee
+      const hitTexts = [];
+      if (renderer.textBounds) {
+        for (const [k, tb] of Object.entries(renderer.textBounds)) {
+          if (tb.x < mb.x + mb.w && tb.x + tb.w > mb.x &&
+              tb.y < mb.y + mb.h && tb.y + tb.h > mb.y) {
+            hitTexts.push(k);
+          }
+        }
+      }
+      if (hitTexts.length > 0) {
+        state.selectedTextKeys = hitTexts;
+        state.selectedTextKey = hitTexts[hitTexts.length - 1];
+        state.selectedWidgets = [];
+        state.selectedWidget = null;
+        syncTextTabEditor(state.selectedTextKey);
+        syncGizmoTextToolbar();
+        const mainTb = renderer.textBounds[state.selectedTextKey];
+        if (mainTb) updateSubElementInspector(mainTb.widgetKey, mainTb.partKey);
+        triggerRender();
+        updateGizmoBox();
+        showToast(`Selected ${hitTexts.length} texts`);
+        return;
+      }
+
+      // Find widgets inside marquee
+      const hitWidgets = [];
+      if (renderer.widgetBounds) {
+        for (const [wk, wb] of Object.entries(renderer.widgetBounds)) {
+          if (wb.x < mb.x + mb.w && wb.x + wb.width > mb.x &&
+              wb.y < mb.y + mb.h && wb.y + wb.height > mb.y) {
+            hitWidgets.push(wk);
+          }
+        }
+      }
+      if (hitWidgets.length > 0) {
+        state.selectedWidgets = hitWidgets;
+        state.selectedWidget = hitWidgets[0];
+        state.selectedTextKeys = [];
+        state.selectedTextKey = null;
+        selectWidget(hitWidgets[0], false);
+        triggerRender();
+        updateGizmoBox();
+        showToast(`Selected ${hitWidgets.length} items`);
+        return;
+      }
+    }
+
+    // Clicked empty space
+    state.selectedWidgets = [];
+    state.selectedWidget = null;
+    state.selectedTextKeys = [];
+    state.selectedTextKey = null;
+    selectWidget(null);
+    triggerRender();
+    updateGizmoBox();
+  };
+
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+}
+window.startSingleActivityMarquee = startSingleActivityMarquee;
+
+const handlePointerDown = (clientX, clientY, e = null) => {
     // 1. Weekly Mode on-canvas text selection and dragging
-
     if (state.isWeeklyMode) {
-
       const rect = canvas.getBoundingClientRect();
-
       const scaleX = canvas.width / rect.width;
-
       const scaleY = canvas.height / rect.height;
-
       const clickX = (clientX - rect.left) * scaleX;
-
       const clickY = (clientY - rect.top) * scaleY;
-
-
 
       const { textKeys: curTextKeys, cardKeys: curCardKeys } = getWeeklySelectedItems();
 
-
-
-      // 1. Check if clicking/tapping resize handles of currently selected card (if only 1 card selected)
-
+      // Check if clicking resize handles of selected card
       if (curCardKeys.length === 1 && curTextKeys.length === 0 && renderer && renderer.weeklyCardBounds) {
-
         const selCard = renderer.weeklyCardBounds[curCardKeys[0]];
-
         if (selCard && typeof getWeeklyCardResizeHandles === 'function') {
-
           const handles = getWeeklyCardResizeHandles(selCard);
-
           const hitRadius = (window._weeklyIsTouchInteraction ? 26 : 14);
-
           for (const h of handles) {
-
-            const dist = Math.hypot(clickX - h.x, clickY - h.y);
-
-            if (dist <= hitRadius) {
-
+            if (Math.hypot(clickX - h.x, clickY - h.y) <= hitRadius) {
               startWeeklyCardResize(clientX, clientY, curCardKeys[0], h.name, scaleX, scaleY);
-
               return;
-
             }
-
           }
-
         }
-
       }
 
-
-
-      // 2. Check text bounds
-
+      // Check text bounds
       let foundKey = null;
-
       let minDistance = Infinity;
-
       const bounds = renderer.weeklyTextBounds || {};
-
       for (const [key, b] of Object.entries(bounds).reverse()) {
-
         const margin = 10;
-
         if (clickX >= b.x - margin && clickX <= b.x + b.w + margin &&
-
             clickY >= b.y - margin && clickY <= b.y + b.h + margin) {
-
           const centerX = b.x + b.w / 2;
-
           const centerY = b.y + b.h / 2;
-
           const dist = Math.hypot(clickX - centerX, clickY - centerY);
-
           if (dist < minDistance) {
-
             minDistance = dist;
-
             foundKey = key;
-
           }
-
         }
-
       }
 
-
-
-      // 3. Check card / shape bounds (prioritize nested child shapes over large containers)
+      // Check card / shape bounds
       let foundCardKey = null;
       let minCardArea = Infinity;
       let minCardDist = Infinity;
@@ -32553,104 +32983,43 @@ function setupGizmoController() {
         }
       }
 
-
-
       const isMultiTrigger = window.weeklyMultiSelectMode || window._weeklyShiftKeyActive;
 
-
-
-      // Handle hit text element
-
       if (foundKey) {
-
         if (isMultiTrigger) {
-
           toggleWeeklyItemSelection('text', foundKey);
-
           return;
-
         }
-
-
-
-        // If clicked element is ALREADY part of a multi-selection group, start group drag!
-
         if (curTextKeys.includes(foundKey) && (curTextKeys.length + curCardKeys.length > 1)) {
-
           startWeeklyGroupDrag(clientX, clientY, curTextKeys, curCardKeys, scaleX, scaleY);
-
           return;
-
         }
-
-
-
-        // Single text selection
-
         selectWeeklyItemsBulk({ textKeys: [foundKey], cardKeys: [] });
-
         startWeeklyTextDrag(clientX, clientY, foundKey, scaleX, scaleY);
-
         return;
-
       }
-
-
-
-      // Handle hit card element
 
       if (foundCardKey) {
-
         if (isMultiTrigger) {
-
           toggleWeeklyItemSelection('card', foundCardKey);
-
           return;
-
         }
-
-
-
-        // If clicked card is ALREADY part of a multi-selection group, start group drag!
-
         if (curCardKeys.includes(foundCardKey) && (curTextKeys.length + curCardKeys.length > 1)) {
-
           startWeeklyGroupDrag(clientX, clientY, curTextKeys, curCardKeys, scaleX, scaleY);
-
           return;
-
         }
-
-
-
-        // Single card selection
-
         selectWeeklyItemsBulk({ textKeys: [], cardKeys: [foundCardKey] });
-
         startWeeklyCardDrag(clientX, clientY, foundCardKey, scaleX, scaleY);
-
         return;
-
       }
 
-
-
-      // 4. Hit empty canvas: start Marquee selection box
-
       startWeeklyMarquee(clientX, clientY, scaleX, scaleY);
-
       return;
-
     }
-
-
-
-
-
-
 
     if (!state.isInteractiveLayout) return;
 
+    const isMulti = !!(e && (e.shiftKey || e.ctrlKey || e.metaKey));
     const rect = canvas.getBoundingClientRect();
     const scale = canvas.width / rect.width;
     const clickX = (clientX - rect.left) * scale;
@@ -32661,9 +33030,18 @@ function setupGizmoController() {
     let minTextDist = Infinity;
     const tBounds = renderer.textBounds || {};
     for (const [key, tb] of Object.entries(tBounds).reverse()) {
+      let tx = clickX;
+      let ty = clickY;
+      if (tb.options && tb.options.rotation) {
+        const cx = tb.x + tb.w / 2;
+        const cy = tb.y + tb.h / 2;
+        const rad = -tb.options.rotation * (Math.PI / 180);
+        tx = Math.cos(rad) * (clickX - cx) - Math.sin(rad) * (clickY - cy) + cx;
+        ty = Math.sin(rad) * (clickX - cx) + Math.cos(rad) * (clickY - cy) + cy;
+      }
       const margin = 8;
-      if (clickX >= tb.x - margin && clickX <= tb.x + tb.w + margin &&
-          clickY >= tb.y - margin && clickY <= tb.y + tb.h + margin) {
+      if (tx >= tb.x - margin && tx <= tb.x + tb.w + margin &&
+          ty >= tb.y - margin && ty <= tb.y + tb.h + margin) {
         const centerX = tb.x + tb.w / 2;
         const centerY = tb.y + tb.h / 2;
         const dist = Math.hypot(clickX - centerX, clickY - centerY);
@@ -32675,7 +33053,13 @@ function setupGizmoController() {
     }
 
     if (foundTextKey) {
-      selectSingleText(foundTextKey, clientX, clientY);
+      if (!isMulti && state.selectedTextKeys && state.selectedTextKeys.includes(foundTextKey) && state.selectedTextKeys.length > 1) {
+        // Keep group selection and start group drag
+        const tb = renderer.textBounds[foundTextKey];
+        startSingleTextDrag(clientX, clientY, tb.widgetKey, tb.partKey);
+        return;
+      }
+      selectSingleText(foundTextKey, clientX, clientY, isMulti);
       return;
     }
 
@@ -32685,53 +33069,44 @@ function setupGizmoController() {
     if (foundKey) {
       state.selectedTextKey = null;
       state.selectedTextKeys = [];
-      selectWidget(foundKey, false);
 
+      if (!state.selectedWidgets) state.selectedWidgets = [];
 
-
-      startDragMove(clientX, clientY);
-
-
-
-    } else {
-
-
-
-      if (state.config.bgType === 'photo' && renderer.bgImage) {
-
-
-
-        selectWidget('__bg_photo__');
-
-
-
-        startPhotoDrag(clientX, clientY);
-
-
-
-      } else {
-
-
-
-        selectWidget(null);
-
-
-
+      if (isMulti) {
+        if (state.selectedWidgets.includes(foundKey)) {
+          state.selectedWidgets = state.selectedWidgets.filter(k => k !== foundKey);
+          state.selectedWidget = state.selectedWidgets[state.selectedWidgets.length - 1] || null;
+        } else {
+          state.selectedWidgets.push(foundKey);
+          state.selectedWidget = foundKey;
+        }
+        selectWidget(state.selectedWidget, false);
+        triggerRender();
+        updateGizmoBox();
+        return;
       }
 
+      if (state.selectedWidgets.includes(foundKey) && state.selectedWidgets.length > 1) {
+        // Already part of multi-widget selection: start group move drag
+        startDragMove(clientX, clientY);
+        return;
+      }
 
-
+      state.selectedWidgets = [foundKey];
+      state.selectedWidget = foundKey;
+      selectWidget(foundKey, false);
+      startDragMove(clientX, clientY);
+      return;
+    } else {
+      if (state.config.bgType === 'photo' && renderer.bgImage && !isMulti) {
+        state.selectedWidgets = ['__bg_photo__'];
+        selectWidget('__bg_photo__');
+        startPhotoDrag(clientX, clientY);
+      } else {
+        startSingleActivityMarquee(clientX, clientY);
+      }
     }
-
-
-
   };
-
-
-
-
-
-
 
   canvas.addEventListener('mousemove', (e) => {
 
@@ -33394,12 +33769,29 @@ function setupGizmoController() {
 
 
         dragInitialPos = { ...(state.config.widgetPositions[state.selectedWidget] || b) };
-
-
-
       }
 
-
+      // Record multi-widget initial positions for group dragging
+      dragInitialWidgetPositions = {};
+      const activeWidgets = (state.selectedWidgets && state.selectedWidgets.length > 0)
+        ? state.selectedWidgets
+        : (state.selectedWidget ? [state.selectedWidget] : []);
+      for (const wKey of activeWidgets) {
+        const wb = renderer.widgetBounds[wKey];
+        if (!wb) continue;
+        if (wKey.endsWith('_bg')) {
+          const baseKey = wKey.replace(/_bg$/, '');
+          const bgCustom = (state.config.widgetBgStyles && state.config.widgetBgStyles[baseKey]) || {};
+          dragInitialWidgetPositions[wKey] = {
+            offsetX: typeof bgCustom.offsetX === 'number' ? bgCustom.offsetX : 0,
+            offsetY: typeof bgCustom.offsetY === 'number' ? bgCustom.offsetY : 0,
+            isBg: true,
+            baseKey
+          };
+        } else {
+          dragInitialWidgetPositions[wKey] = { ...(state.config.widgetPositions[wKey] || wb), isBg: false };
+        }
+      }
 
       isInteracting = true;
 
@@ -33812,91 +34204,44 @@ function setupGizmoController() {
         updateGizmoBox();
         return;
       }
-    } else if (activeDragMode === 'move') {
+        } else if (activeDragMode === 'move') {
       if (Math.hypot(clientX - dragStartX, clientY - dragStartY) < 3) return;
 
+      const activeWidgets = (state.selectedWidgets && state.selectedWidgets.length > 0)
+        ? state.selectedWidgets
+        : (state.selectedWidget ? [state.selectedWidget] : []);
 
+      for (const wKey of activeWidgets) {
+        const init = dragInitialWidgetPositions && dragInitialWidgetPositions[wKey];
+        if (!init) continue;
 
-      if (state.selectedWidget.endsWith('_bg')) {
-
-
-
-        const baseKey = state.selectedWidget.replace(/_bg$/, '');
-
-
-
-        if (!state.config.widgetBgStyles) state.config.widgetBgStyles = {};
-
-
-
-        if (!state.config.widgetBgStyles[baseKey]) state.config.widgetBgStyles[baseKey] = {};
-
-
-
-        const cur = state.config.widgetBgStyles[baseKey];
-
-
-
-        cur.offsetX = snapVal(dragInitialPos.offsetX + deltaX, g);
-
-
-
-        cur.offsetY = snapVal(dragInitialPos.offsetY + deltaY, g);
-
-
-
-        state.config.isDraggingGrid = state.config.snapToGrid;
-
-
-
-        triggerRender();
-
-
-
-      } else {
-
-
-
-        const newX = snapVal(dragInitialPos.x + deltaX, g);
-
-
-
-        const newY = snapVal(dragInitialPos.y + deltaY, g);
-
-
-
-        state.config.widgetPositions[state.selectedWidget] = {
-
-
-
-          ...dragInitialPos,
-
-
-
-          x: newX,
-
-
-
-          y: newY,
-
-
-
-        };
-
-
-
-        state.config.isDraggingGrid = state.config.snapToGrid;
-
-
-
-        triggerRender();
-
-
-
+        if (init.isBg) {
+          if (!state.config.widgetBgStyles) state.config.widgetBgStyles = {};
+          if (!state.config.widgetBgStyles[init.baseKey]) state.config.widgetBgStyles[init.baseKey] = {};
+          const cur = state.config.widgetBgStyles[init.baseKey];
+          cur.offsetX = snapVal(init.offsetX + deltaX, g);
+          cur.offsetY = snapVal(init.offsetY + deltaY, g);
+        } else {
+          if (!state.config.widgetPositions) state.config.widgetPositions = {};
+          const newX = snapVal(init.x + deltaX, g);
+          const newY = snapVal(init.y + deltaY, g);
+          state.config.widgetPositions[wKey] = {
+            ...init,
+            x: newX,
+            y: newY,
+          };
+          if (state.config.customTexts && Array.isArray(state.config.customTexts)) {
+            const ct = state.config.customTexts.find(t => t.id === wKey);
+            if (ct) { ct.x = newX; ct.y = newY; }
+          }
+          if (state.config.customShapes && Array.isArray(state.config.customShapes)) {
+            const cs = state.config.customShapes.find(s => s.id === wKey);
+            if (cs) { cs.x = newX; cs.y = newY; }
+          }
+        }
       }
-
-
-
+      state.config.isDraggingGrid = state.config.snapToGrid;
+      triggerRender();
     } else if (activeDragMode === 'resize') {
 
 
@@ -34407,7 +34752,27 @@ function startDragMove(clientX, clientY) {
 
   }
 
-
+  // Record multi-widget initial positions for group dragging
+  dragInitialWidgetPositions = {};
+  const activeWidgets = (state.selectedWidgets && state.selectedWidgets.length > 0)
+    ? state.selectedWidgets
+    : (state.selectedWidget ? [state.selectedWidget] : []);
+  for (const wKey of activeWidgets) {
+    const wb = renderer.widgetBounds[wKey];
+    if (!wb) continue;
+    if (wKey.endsWith('_bg')) {
+      const baseKey = wKey.replace(/_bg$/, '');
+      const bgCustom = (state.config.widgetBgStyles && state.config.widgetBgStyles[baseKey]) || {};
+      dragInitialWidgetPositions[wKey] = {
+        offsetX: typeof bgCustom.offsetX === 'number' ? bgCustom.offsetX : 0,
+        offsetY: typeof bgCustom.offsetY === 'number' ? bgCustom.offsetY : 0,
+        isBg: true,
+        baseKey
+      };
+    } else {
+      dragInitialWidgetPositions[wKey] = { ...(state.config.widgetPositions[wKey] || wb), isBg: false };
+    }
+  }
 
   isInteracting = true;
 
@@ -34793,49 +35158,107 @@ function updateGizmoBox() {
     return;
   }
 
-  // 1. Text Selection Mode in Single Activity
-  if (!state.isWeeklyMode && state.selectedTextKey && renderer && renderer.textBounds && renderer.textBounds[state.selectedTextKey]) {
-    const tb = renderer.textBounds[state.selectedTextKey];
-    const canvasRect = canvas.getBoundingClientRect();
-    const wrapperRect = canvasWrapper.getBoundingClientRect();
-    const scale = canvasRect.width / canvas.width;
-    const offsetX = canvasRect.left - wrapperRect.left;
-    const offsetY = canvasRect.top - wrapperRect.top;
+  const canvasRect = canvas.getBoundingClientRect();
+  const wrapperRect = canvasWrapper.getBoundingClientRect();
+  const scale = canvasRect.width / canvas.width;
+  const offsetX = canvasRect.left - wrapperRect.left;
+  const offsetY = canvasRect.top - wrapperRect.top;
 
-    const pad = 4;
-    const cssLeft = offsetX + (tb.x - pad) * scale;
-    const cssTop = offsetY + (tb.y - pad) * scale;
-    const cssWidth = Math.max(28, (tb.w + pad * 2) * scale);
-    const cssHeight = Math.max(20, (tb.h + pad * 2) * scale);
+  // 1. Text Selection Mode in Single Activity (Single or Multiple Texts)
+  const activeTextKeys = (state.selectedTextKeys && state.selectedTextKeys.length > 0)
+    ? state.selectedTextKeys
+    : (state.selectedTextKey ? [state.selectedTextKey] : []);
 
-    gizmoBox.style.display = 'block';
-    gizmoBox.style.left = `${cssLeft}px`;
-    gizmoBox.style.top = `${cssTop}px`;
-    gizmoBox.style.width = `${cssWidth}px`;
-    gizmoBox.style.height = `${cssHeight}px`;
+  if (!state.isWeeklyMode && activeTextKeys.length > 0 && renderer && renderer.textBounds) {
+    const validBounds = activeTextKeys.map(k => renderer.textBounds[k]).filter(Boolean);
+    if (validBounds.length > 0) {
+      const minX = Math.min(...validBounds.map(b => b.x));
+      const minY = Math.min(...validBounds.map(b => b.y));
+      const maxX = Math.max(...validBounds.map(b => b.x + b.w));
+      const maxY = Math.max(...validBounds.map(b => b.y + b.h));
 
-    const rot = (tb.options && typeof tb.options.rotation === 'number') ? tb.options.rotation : 0;
-    gizmoBox.style.transform = `rotate(${rot}deg)`;
-    gizmoBox.style.transformOrigin = 'center center';
+      const pad = 4;
+      const cssLeft = offsetX + (minX - pad) * scale;
+      const cssTop = offsetY + (minY - pad) * scale;
+      const cssWidth = Math.max(28, (maxX - minX + pad * 2) * scale);
+      const cssHeight = Math.max(20, (maxY - minY + pad * 2) * scale);
 
-    gizmoBox.classList.add('mode-text');
-    gizmoBox.classList.remove('mode-bg-border');
+      gizmoBox.style.display = 'block';
+      gizmoBox.style.left = `${cssLeft}px`;
+      gizmoBox.style.top = `${cssTop}px`;
+      gizmoBox.style.width = `${cssWidth}px`;
+      gizmoBox.style.height = `${cssHeight}px`;
 
-    const gizmoTitle = document.getElementById('gizmoTitle');
-    if (gizmoTitle) {
-      const displayLabel = tb.label || tb.partKey || 'Text';
-      gizmoTitle.textContent = `✏️ ${displayLabel}`;
+      const mainTb = renderer.textBounds[state.selectedTextKey || activeTextKeys[0]];
+      const rot = (mainTb && mainTb.options && typeof mainTb.options.rotation === 'number') ? mainTb.options.rotation : 0;
+      gizmoBox.style.transform = `rotate(${rot}deg)`;
+      gizmoBox.style.transformOrigin = 'center center';
+
+      gizmoBox.classList.add('mode-text');
+      gizmoBox.classList.remove('mode-bg-border');
+
+      const gizmoTitle = document.getElementById('gizmoTitle');
+      if (gizmoTitle) {
+        if (activeTextKeys.length > 1) {
+          gizmoTitle.textContent = `✏️ ${activeTextKeys.length} Texts Selected (Bulk Edit)`;
+        } else {
+          const displayLabel = mainTb ? (mainTb.label || mainTb.partKey || 'Text') : 'Text';
+          gizmoTitle.textContent = `✏️ ${displayLabel}`;
+        }
+      }
+
+      const gizmoSubPartSelect = document.getElementById('gizmoSubPartSelect');
+      if (gizmoSubPartSelect && mainTb) {
+        gizmoSubPartSelect.style.display = '';
+        populateGizmoSubPartDropdown(mainTb.widgetKey, mainTb.partKey);
+      }
+
+      // Sync and show Floating Text Toolbar
+      syncGizmoTextToolbar();
+      return;
     }
-
-    const gizmoSubPartSelect = document.getElementById('gizmoSubPartSelect');
-    if (gizmoSubPartSelect) {
-      gizmoSubPartSelect.style.display = '';
-      populateGizmoSubPartDropdown(tb.widgetKey, tb.partKey);
-    }
-    return;
   }
 
-  // 2. Widget Selection Mode
+  // Hide Floating Text Toolbar if not in text selection mode
+  const tbToolbar = document.getElementById('gizmoTextToolbar');
+  if (tbToolbar) tbToolbar.style.display = 'none';
+
+  // 2. Multi-Widget Selection Mode
+  const activeWidgets = (state.selectedWidgets && state.selectedWidgets.length > 1) ? state.selectedWidgets : [];
+  if (activeWidgets.length > 1 && renderer && renderer.widgetBounds) {
+    const validWb = activeWidgets.map(k => renderer.widgetBounds[k]).filter(Boolean);
+    if (validWb.length > 0) {
+      const minX = Math.min(...validWb.map(b => b.x));
+      const minY = Math.min(...validWb.map(b => b.y));
+      const maxX = Math.max(...validWb.map(b => b.x + b.width));
+      const maxY = Math.max(...validWb.map(b => b.y + b.height));
+
+      const cssLeft = offsetX + minX * scale;
+      const cssTop = offsetY + minY * scale;
+      const cssWidth = Math.max(40, (maxX - minX) * scale);
+      const cssHeight = Math.max(30, (maxY - minY) * scale);
+
+      gizmoBox.style.display = 'block';
+      gizmoBox.style.left = `${cssLeft}px`;
+      gizmoBox.style.top = `${cssTop}px`;
+      gizmoBox.style.width = `${cssWidth}px`;
+      gizmoBox.style.height = `${cssHeight}px`;
+      gizmoBox.style.transform = 'none';
+
+      gizmoBox.classList.remove('mode-text');
+      gizmoBox.classList.remove('mode-bg-border');
+
+      const gizmoTitle = document.getElementById('gizmoTitle');
+      if (gizmoTitle) {
+        gizmoTitle.textContent = `📦 ${activeWidgets.length} Items Selected (Move Together)`;
+      }
+      const gizmoSubPartSelect = document.getElementById('gizmoSubPartSelect');
+      if (gizmoSubPartSelect) gizmoSubPartSelect.style.display = 'none';
+      return;
+    }
+  }
+
+  // 3. Single Widget Selection Mode
   if (!state.selectedWidget) {
     gizmoBox.style.display = 'none';
     return;
@@ -34856,12 +35279,6 @@ function updateGizmoBox() {
   } else {
     gizmoBox.classList.remove('mode-bg-border');
   }
-
-  const canvasRect = canvas.getBoundingClientRect();
-  const wrapperRect = canvasWrapper.getBoundingClientRect();
-  const scale = canvasRect.width / canvas.width;
-  const offsetX = canvasRect.left - wrapperRect.left;
-  const offsetY = canvasRect.top - wrapperRect.top;
 
   const cssLeft = offsetX + b.x * scale;
   const cssTop = offsetY + b.y * scale;
@@ -34899,6 +35316,11 @@ function updateGizmoBox() {
     gizmoDeleteBtn.style.display = 'inline-flex';
   }
 }
+window.populateGizmoSubPartDropdown = populateGizmoSubPartDropdown;
+window.selectWidget = selectWidget;
+
+window.updateGizmoBox = updateGizmoBox;
+
 window.populateGizmoSubPartDropdown = populateGizmoSubPartDropdown;
 window.selectWidget = selectWidget;
 

@@ -242,58 +242,108 @@ export class OverlayRenderer {
   }
 
   drawSingleActivitySelectionGizmo(ctx, config) {
-    const selKey = (window.state && window.state.selectedTextKey) || this.selectedTextKey;
-    if (!selKey || !this.textBounds) return;
-    const tb = this.textBounds[selKey];
-    if (!tb || tb.w <= 0 || tb.h <= 0) return;
+    if (!window.state) return;
+    const s = window.state;
 
-    ctx.save();
-    const pad = 4;
-    const gx = tb.x - pad;
-    const gy = tb.y - pad;
-    const gw = tb.w + pad * 2;
-    const gh = tb.h + pad * 2;
+    // 1. Render Marquee Box on Canvas (Single Activity)
+    if (this.singleActivityMarqueeBox) {
+      const mb = this.singleActivityMarqueeBox;
+      ctx.save();
+      ctx.strokeStyle = '#00f0ff';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 3]);
+      ctx.fillStyle = 'rgba(0, 240, 255, 0.08)';
+      ctx.fillRect(mb.x, mb.y, mb.w, mb.h);
+      ctx.strokeRect(mb.x, mb.y, mb.w, mb.h);
+      ctx.restore();
+    }
 
-    // Glowing dashed cyan bounding box
-    ctx.strokeStyle = '#00f0ff';
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([4, 3]);
-    ctx.strokeRect(gx, gy, gw, gh);
+    // 2. Render all selected individual text elements
+    const activeTextKeys = (s.selectedTextKeys && s.selectedTextKeys.length > 0)
+      ? s.selectedTextKeys
+      : (s.selectedTextKey ? [s.selectedTextKey] : []);
 
-    // Subtle cyan tint
-    ctx.fillStyle = 'rgba(0, 240, 255, 0.08)';
-    ctx.fillRect(gx, gy, gw, gh);
+    if (activeTextKeys.length > 0 && this.textBounds) {
+      ctx.save();
+      for (const tKey of activeTextKeys) {
+        const tb = this.textBounds[tKey];
+        if (!tb || tb.w <= 0 || tb.h <= 0) continue;
 
-    // Corner dot handles
-    ctx.setLineDash([]);
-    ctx.fillStyle = '#00f0ff';
-    const dotR = 2.5;
-    [[gx, gy], [gx + gw, gy], [gx, gy + gh], [gx + gw, gy + gh]].forEach(([cx, cy]) => {
-      ctx.beginPath();
-      ctx.arc(cx, cy, dotR, 0, Math.PI * 2);
-      ctx.fill();
-    });
+        const pad = 4;
+        const gx = tb.x - pad;
+        const gy = tb.y - pad;
+        const gw = tb.w + pad * 2;
+        const gh = tb.h + pad * 2;
 
-    // Tag badge on top
-    const tagText = tb.label || tb.partKey;
-    ctx.font = 'bold 9px sans-serif';
-    const tagW = ctx.measureText(tagText).width + 8;
-    const tagH = 14;
-    const tagX = gx;
-    const tagY = gy - tagH - 2;
+        ctx.strokeStyle = '#ff007f';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        ctx.strokeRect(gx, gy, gw, gh);
 
-    ctx.fillStyle = '#00f0ff';
-    this.drawRoundedRect(ctx, tagX, Math.max(2, tagY), tagW, tagH, 3);
-    ctx.fill();
+        ctx.fillStyle = 'rgba(255, 0, 127, 0.08)';
+        ctx.fillRect(gx, gy, gw, gh);
 
-    ctx.fillStyle = '#000000';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(tagText, tagX + 4, Math.max(2, tagY) + tagH / 2);
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#ff007f';
+        const dotR = 2.5;
+        [[gx, gy], [gx + gw, gy], [gx, gy + gh], [gx + gw, gy + gh]].forEach(([cx, cy]) => {
+          ctx.beginPath();
+          ctx.arc(cx, cy, dotR, 0, Math.PI * 2);
+          ctx.fill();
+        });
 
-    ctx.restore();
+        // Tag badge
+        const tagText = tb.label || tb.partKey;
+        ctx.font = 'bold 9px sans-serif';
+        const tagW = ctx.measureText(tagText).width + 8;
+        const tagH = 14;
+        const tagX = gx;
+        const tagY = gy - tagH - 2;
+
+        ctx.fillStyle = '#ff007f';
+        this.drawRoundedRect(ctx, tagX, Math.max(2, tagY), tagW, tagH, 3);
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(tagText, tagX + 4, Math.max(2, tagY) + tagH / 2);
+      }
+      ctx.restore();
+    }
+
+    // 3. Render all selected multiple widgets
+    const activeWidgets = (s.selectedWidgets && s.selectedWidgets.length > 1) ? s.selectedWidgets : [];
+    if (activeWidgets.length > 1 && this.widgetBounds) {
+      ctx.save();
+      for (const wKey of activeWidgets) {
+        const wb = this.widgetBounds[wKey];
+        if (!wb) continue;
+        ctx.strokeStyle = '#ccff00';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 3]);
+        ctx.strokeRect(wb.x, wb.y, wb.width, wb.height);
+
+        ctx.fillStyle = 'rgba(204, 255, 0, 0.06)';
+        ctx.fillRect(wb.x, wb.y, wb.width, wb.height);
+
+        // Tag badge
+        ctx.setLineDash([]);
+        const wTag = wb.name || wKey;
+        ctx.font = 'bold 10px sans-serif';
+        const wTagW = ctx.measureText(wTag).width + 8;
+        const wTagH = 15;
+        ctx.fillStyle = '#ccff00';
+        this.drawRoundedRect(ctx, wb.x, Math.max(2, wb.y - wTagH - 2), wTagW, wTagH, 3);
+        ctx.fill();
+        ctx.fillStyle = '#0a0a0d';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(wTag, wb.x + 4, Math.max(2, wb.y - wTagH - 2) + wTagH / 2);
+      }
+      ctx.restore();
+    }
   }
-
 
   recordBounds(key, name, x, y, width, height, customRot = null) {
     if (!this.widgetBounds) this.widgetBounds = {};
@@ -964,7 +1014,8 @@ export class OverlayRenderer {
     let subScale = typeof off.scale === 'number' && !isNaN(off.scale) ? off.scale : 100;
     if (subScale > 5) subScale = subScale / 100;
     const finalSize = Math.max(6, Math.round(baseSize * widgetScale * subScale));
-    return `${weight} ${finalSize}px ${fontFam}`;
+    const effWeight = (off.fontWeight && off.fontWeight !== 'default') ? off.fontWeight : weight;
+    return `${effWeight} ${finalSize}px ${fontFam}`;
   }
 
   getEffectiveColors(config, theme, accent, key) {
@@ -1097,11 +1148,33 @@ export class OverlayRenderer {
           pLabel = `${wKey.toUpperCase()} "${s.substring(0, 12)}"`;
         }
 
-        // Apply custom color override if specified for this sub-element
+        // Apply custom styling overrides if specified for this sub-element
         if (pKey) {
           const off = self.getElementOffset(config, wKey, pKey);
-          if (off && off.color && off.color !== 'default') {
-            this.fillStyle = off.color;
+          if (off) {
+            if (off.color && off.color !== 'default') {
+              this.fillStyle = off.color;
+            }
+            if (off.letterSpacing !== undefined && off.letterSpacing !== 0) {
+              this.letterSpacing = `${off.letterSpacing}px`;
+            }
+            if (off.shadowToggle || off.shadowColor) {
+              this.shadowColor = off.shadowColor || 'rgba(0, 0, 0, 0.75)';
+              this.shadowBlur = typeof off.shadowBlur === 'number' ? off.shadowBlur : 8;
+              this.shadowOffsetX = typeof off.shadowOffsetX === 'number' ? off.shadowOffsetX : 0;
+              this.shadowOffsetY = typeof off.shadowOffsetY === 'number' ? off.shadowOffsetY : 3;
+            }
+            if (off.outlineToggle || (typeof off.outlineWidth === 'number' && off.outlineWidth > 0)) {
+              this.save();
+              this.strokeStyle = off.outlineColor || '#000000';
+              this.lineWidth = (off.outlineWidth || 1) * 2;
+              this.lineJoin = 'round';
+              this.strokeText.apply(this, arguments);
+              this.restore();
+            }
+            if (off.text !== undefined && off.text !== null && String(off.text).trim() !== '') {
+              arguments[0] = String(off.text);
+            }
           }
         }
 

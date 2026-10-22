@@ -156,6 +156,40 @@
 
               </div>
 
+              <!-- Floating Quick Text Toolbar for Selected Text(s) -->
+              <div id="gizmoTextToolbar" class="gizmo-text-toolbar" style="display: none;">
+                <input type="text" id="gizmoTextInput" placeholder="Edit text..." title="Change text content">
+                <select id="gizmoFontFamily" title="Font Family">
+                  <option value="default">Default Font</option>
+                  <option value="athletic">Athletic Bold</option>
+                  <option value="bebas">Bebas Neue</option>
+                  <option value="teko">Teko Tall</option>
+                  <option value="bungee">Bungee Heavy</option>
+                  <option value="modern">Modern Sans</option>
+                  <option value="mono">JetBrains Mono</option>
+                  <option value="serif">Playfair Serif</option>
+                </select>
+                <select id="gizmoFontWeight" title="Font Weight">
+                  <option value="default">Weight: Default</option>
+                  <option value="normal">Normal</option>
+                  <option value="bold">Bold</option>
+                  <option value="300">Light (300)</option>
+                  <option value="600">SemiBold (600)</option>
+                  <option value="800">Black (800)</option>
+                </select>
+                <div class="gizmo-tool-group" title="Font Size Scale">
+                  <button type="button" id="gizmoSizeDownBtn" class="gizmo-mini-btn" title="Decrease Size">-A</button>
+                  <span id="gizmoSizeDisplay" style="font-size: 0.68rem; font-weight: 700; color: #ff007f; min-width: 32px; text-align: center;">100%</span>
+                  <button type="button" id="gizmoSizeUpBtn" class="gizmo-mini-btn" title="Increase Size">+A</button>
+                </div>
+                <div class="gizmo-tool-group" title="Text Color">
+                  <input type="color" id="gizmoColorInput" value="#ffffff" style="width: 20px; height: 18px; border: none; cursor: pointer; border-radius: 2px;">
+                  <input type="text" id="gizmoColorHex" placeholder="#ffffff" style="width: 52px; height: 18px; font-size: 0.68rem; padding: 0 2px;">
+                </div>
+                <button type="button" id="gizmoShadowToggleBtn" class="gizmo-toggle-btn" title="Toggle Drop Shadow">S</button>
+                <button type="button" id="gizmoOutlineToggleBtn" class="gizmo-toggle-btn" title="Toggle Text Outline">O</button>
+              </div>
+
               <!-- 8 Handles for Resize -->
 
               <div class="gizmo-handle handle-nw" data-handle="nw"></div>
@@ -5388,6 +5422,51 @@
                     <option value="mono">JetBrains Mono</option>
                     <option value="serif">Playfair Serif</option>
                   </select>
+                </div>
+              </div>
+              <!-- Extra Styling: Font Weight & Text Transform -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" style="font-size: 0.7rem; margin-bottom: 2px;">Font Weight:</label>
+                  <select id="textTabElementFontWeight" class="form-select" style="font-size: 0.75rem; padding: 2px 6px;">
+                    <option value="default">Default</option>
+                    <option value="normal">Normal</option>
+                    <option value="bold">Bold</option>
+                    <option value="300">Light (300)</option>
+                    <option value="600">SemiBold (600)</option>
+                    <option value="800">ExtraBold (800)</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" style="font-size: 0.7rem; margin-bottom: 2px;">Transform / Case:</label>
+                  <select id="textTabElementTransform" class="form-select" style="font-size: 0.75rem; padding: 2px 6px;">
+                    <option value="none">Original Text</option>
+                    <option value="uppercase">UPPERCASE</option>
+                    <option value="lowercase">lowercase</option>
+                    <option value="capitalize">Capitalize</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Shadow & Outline Row -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; background: rgba(0,0,0,0.2); padding: 6px; border-radius: 4px;">
+                <div>
+                  <label style="font-size: 0.7rem; display: flex; align-items: center; gap: 4px; cursor: pointer; color: #fff; font-weight: 600;">
+                    <input type="checkbox" id="textTabElementShadowToggle"> Drop Shadow
+                  </label>
+                  <div style="display: flex; gap: 4px; align-items: center; margin-top: 4px;">
+                    <input type="color" id="textTabElementShadowColor" value="#000000" style="width: 20px; height: 18px; border: none; border-radius: 2px;">
+                    <input type="range" id="textTabElementShadowBlur" min="0" max="25" step="1" value="8" style="flex: 1;" title="Shadow Blur">
+                  </div>
+                </div>
+                <div>
+                  <label style="font-size: 0.7rem; display: flex; align-items: center; gap: 4px; cursor: pointer; color: #fff; font-weight: 600;">
+                    <input type="checkbox" id="textTabElementOutlineToggle"> Text Outline
+                  </label>
+                  <div style="display: flex; gap: 4px; align-items: center; margin-top: 4px;">
+                    <input type="color" id="textTabElementOutlineColor" value="#000000" style="width: 20px; height: 18px; border: none; border-radius: 2px;">
+                    <input type="range" id="textTabElementOutlineWidth" min="0.5" max="8" step="0.5" value="2" style="flex: 1;" title="Outline Width">
+                  </div>
                 </div>
               </div>
 
