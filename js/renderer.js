@@ -1029,6 +1029,7 @@ export class OverlayRenderer {
     this.widgetBounds = {};
     this.textBounds = {};
     this.currentConfig = config;
+    this._textCounter = 0;
 
         const origFillText = ctx.fillText;
     const self = this;
@@ -1040,15 +1041,16 @@ export class OverlayRenderer {
         let pLabel = null;
 
         if (wKey === 'header') {
-          if (self._headerTitleStr && (s === self._headerTitleStr.trim() || s === self._headerTitleStr.trim().toUpperCase())) {
+          const sUpper = s.toUpperCase();
+          if (self._headerTitleStr && sUpper === self._headerTitleStr.trim().toUpperCase()) {
             pKey = 'title'; pLabel = 'Header Title';
-          } else if (self._headerSubStr && (s.includes(self._headerSubStr.trim()) || self._headerSubStr.includes(s) || s.includes(self._headerSubStr.trim().toUpperCase()))) {
+          } else if (self._headerSubStr && (sUpper.includes(self._headerSubStr.trim().toUpperCase()) || self._headerSubStr.trim().toUpperCase().includes(sUpper))) {
             pKey = 'subtitle'; pLabel = 'Date & Subtitle';
-          } else if (self._headerRunnerStr && (s.includes(self._headerRunnerStr.trim()) || self._headerRunnerStr.includes(s))) {
+          } else if (self._headerRunnerStr && (sUpper.includes(self._headerRunnerStr.trim().toUpperCase()) || self._headerRunnerStr.trim().toUpperCase().includes(sUpper))) {
             pKey = 'runner'; pLabel = 'Runner Tag';
-          } else if (self._headerLocationStr && (s.includes(self._headerLocationStr.trim()) || self._headerLocationStr.includes(s))) {
+          } else if (self._headerLocationStr && (sUpper.includes(self._headerLocationStr.trim().toUpperCase()) || self._headerLocationStr.trim().toUpperCase().includes(sUpper))) {
             pKey = 'location'; pLabel = 'Location';
-          } else if (self._headerWeatherStr && (s.includes(self._headerWeatherStr.trim()) || self._headerWeatherStr.includes(s))) {
+          } else if (self._headerWeatherStr && (sUpper.includes(self._headerWeatherStr.trim().toUpperCase()) || self._headerWeatherStr.trim().toUpperCase().includes(sUpper))) {
             pKey = 'weather'; pLabel = 'Weather';
           }
         } else if (wKey === 'hero') {
@@ -1093,6 +1095,14 @@ export class OverlayRenderer {
           const clean = s.toLowerCase().replace(/[^a-z0-9]+/g, '_').substring(0, 12) || 'txt';
           pKey = `${clean}_${self._textCounter++}`;
           pLabel = `${wKey.toUpperCase()} "${s.substring(0, 12)}"`;
+        }
+
+        // Apply custom color override if specified for this sub-element
+        if (pKey) {
+          const off = self.getElementOffset(config, wKey, pKey);
+          if (off && off.color && off.color !== 'default') {
+            this.fillStyle = off.color;
+          }
         }
 
         self.recordTextBoundFromDraw(wKey, pKey, pLabel, String(textStr), fx, fy, this);
@@ -1937,9 +1947,13 @@ export class OverlayRenderer {
     let title = this.getTextOverride(config, widgetKey, 'title', config.customTitle || activity.title || 'Morning Run');
     this._headerTitleStr = title;
     let dateText = this.getTextOverride(config, widgetKey, 'subtitle', config.customSubtitle || `${activity.dateFormatted} • ${activity.timeFormatted}`);
+    this._headerSubStr = dateText;
     let runnerName = this.getTextOverride(config, widgetKey, 'runner', config.runnerName || '@runner');
+    this._headerRunnerStr = runnerName;
     let location = this.getTextOverride(config, widgetKey, 'location', config.locationName || '');
+    this._headerLocationStr = location;
     let weatherText = this.getTextOverride(config, widgetKey, 'weather', config.weatherText || '');
+    this._headerWeatherStr = weatherText;
 
     // Sub-element X, Y, Z offsets
     const offTitle = this.getElementOffset(config, widgetKey, 'title');
@@ -3054,14 +3068,16 @@ export class OverlayRenderer {
     const subX = (alignMode === 'center' ? x + width / 2 : alignMode === 'right' ? x + width - padX : x + padX) + offSub.x;
 
     this.applyZDepth(ctx, offTitle.z);
-    ctx.fillStyle = text;
+    ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'title', text);
     ctx.font = this.getSubPartFont(config, widgetKey, 'title', 'bold', 32);
     ctx.fillText(title, titleX, y + padY + 30 + offTitle.y);
+    this.recordTextBoundFromDraw(widgetKey, 'title', 'Header Title', title, titleX, y + padY + 30 + offTitle.y, ctx);
 
     this.applyZDepth(ctx, offSub.z);
     ctx.font = this.getSubPartFont(config, widgetKey, 'subtitle', '500', 14);
-    ctx.fillStyle = textMuted;
+    ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'subtitle', textMuted);
     ctx.fillText(dateText, subX, y + padY + 54 + offSub.y);
+    this.recordTextBoundFromDraw(widgetKey, 'subtitle', 'Date & Subtitle', dateText, subX, y + padY + 54 + offSub.y, ctx);
 
     if (alignMode === 'center') {
       ctx.textAlign = 'center';
@@ -3069,9 +3085,11 @@ export class OverlayRenderer {
       if (metaParts.length > 0) {
         ctx.save();
         this.applyZDepth(ctx, offRunner.z);
-        ctx.fillStyle = elAccent;
+        ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'runner', elAccent);
         ctx.font = this.getSubPartFont(config, widgetKey, 'runner', 'bold', 12);
-        ctx.fillText(metaParts.join('  •  '), x + width / 2, y + padY + 74 + offRunner.y);
+        const metaStr = metaParts.join('  •  ');
+        ctx.fillText(metaStr, x + width / 2, y + padY + 74 + offRunner.y);
+        this.recordTextBoundFromDraw(widgetKey, 'runner', 'Runner Tag', metaStr, x + width / 2, y + padY + 74 + offRunner.y, ctx);
         ctx.restore();
       }
     } else {
@@ -3081,21 +3099,26 @@ export class OverlayRenderer {
 
       if (location) {
         this.applyZDepth(ctx, offLoc.z);
-        ctx.fillStyle = elAccent;
+        ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'location', elAccent);
         ctx.font = this.getSubPartFont(config, widgetKey, 'location', 'bold', 12);
-        ctx.fillText(location.toUpperCase(), metaX + offLoc.x, y + padY + 20 + offLoc.y);
+        const locStr = location.toUpperCase();
+        ctx.fillText(locStr, metaX + offLoc.x, y + padY + 20 + offLoc.y);
+        this.recordTextBoundFromDraw(widgetKey, 'location', 'Location', locStr, metaX + offLoc.x, y + padY + 20 + offLoc.y, ctx);
       }
 
       this.applyZDepth(ctx, offRunner.z);
-      ctx.fillStyle = text;
+      ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'runner', text);
       ctx.font = this.getSubPartFont(config, widgetKey, 'runner', '600', 15);
       ctx.fillText(runnerName, metaX + offRunner.x, y + padY + (location ? 42 : 28) + offRunner.y);
+      this.recordTextBoundFromDraw(widgetKey, 'runner', 'Runner Tag', runnerName, metaX + offRunner.x, y + padY + (location ? 42 : 28) + offRunner.y, ctx);
 
       if (weatherText || config.weatherText) {
+        const wStr = weatherText || config.weatherText;
         this.applyZDepth(ctx, offWeather.z);
-        ctx.fillStyle = textMuted;
+        ctx.fillStyle = this.getSubPartColor(config, widgetKey, 'weather', textMuted);
         ctx.font = this.getSubPartFont(config, widgetKey, 'weather', '500', 12);
-        ctx.fillText(weatherText || config.weatherText, metaX + offWeather.x, y + padY + (location ? 64 : 50) + offWeather.y);
+        ctx.fillText(wStr, metaX + offWeather.x, y + padY + (location ? 64 : 50) + offWeather.y);
+        this.recordTextBoundFromDraw(widgetKey, 'weather', 'Weather', wStr, metaX + offWeather.x, y + padY + (location ? 64 : 50) + offWeather.y, ctx);
       }
     }
 
@@ -7027,6 +7050,7 @@ export class OverlayRenderer {
             ctx.font = this.getSplitFont(config, widgetKey, idx, 'lap', 'bold', cellFontSize);
             const splitLabel = this.getSplitDisplayName(it, idx, config);
             ctx.fillText(splitLabel, col.posX + sOff.lap.x, rowY + sOff.lap.y);
+            this.recordTextBoundFromDraw(widgetKey, `split_lap_${idx}`, `Split ${idx + 1} Name`, splitLabel, col.posX + sOff.lap.x, rowY + sOff.lap.y, ctx);
             this.recordTextBoundFromDraw(widgetKey, `lap_${idx}`, `Split ${idx + 1} Name`, splitLabel, col.posX + sOff.lap.x, rowY + sOff.lap.y, ctx);
             ctx.restore();
           } else if (col.key === 'pace' && !sOff.pace.hidden) {
@@ -7038,6 +7062,8 @@ export class OverlayRenderer {
             ctx.font = pStyle.font;
             const paceStr = it.paceFormatted ? it.paceFormatted.split(' ')[0] : (it.pace ? (Math.floor(it.pace / 60) + ':' + String(Math.floor(it.pace % 60)).padStart(2, '0')) : '--');
             ctx.fillText(paceStr, col.posX + pStyle.x, rowY + pStyle.y);
+            this.recordTextBoundFromDraw(widgetKey, `split_pace_${idx}`, `Split ${idx + 1} Pace`, paceStr, col.posX + pStyle.x, rowY + pStyle.y, ctx);
+            this.recordTextBoundFromDraw(widgetKey, `pace_${idx}`, `Split ${idx + 1} Pace`, paceStr, col.posX + pStyle.x, rowY + pStyle.y, ctx);
             ctx.restore();
           } else if (col.key === 'time') {
             ctx.save();
@@ -7053,6 +7079,8 @@ export class OverlayRenderer {
               timeStr = `${m}:${String(s).padStart(2, '0')}`;
             }
             ctx.fillText(timeStr || '--', col.posX + tStyle.x, rowY + tStyle.y);
+            this.recordTextBoundFromDraw(widgetKey, `split_time_${idx}`, `Split ${idx + 1} Time`, timeStr || '--', col.posX + tStyle.x, rowY + tStyle.y, ctx);
+            this.recordTextBoundFromDraw(widgetKey, `time_${idx}`, `Split ${idx + 1} Time`, timeStr || '--', col.posX + tStyle.x, rowY + tStyle.y, ctx);
             ctx.restore();
           } else if (col.key === 'delta') {
             ctx.save();
@@ -7072,6 +7100,8 @@ export class OverlayRenderer {
             ctx.fillStyle = dStyle.color;
             ctx.font = dStyle.font;
             ctx.fillText(deltaStr, col.posX + dStyle.x, rowY + dStyle.y);
+            this.recordTextBoundFromDraw(widgetKey, `split_delta_${idx}`, `Split ${idx + 1} Delta`, deltaStr, col.posX + dStyle.x, rowY + dStyle.y, ctx);
+            this.recordTextBoundFromDraw(widgetKey, `delta_${idx}`, `Split ${idx + 1} Delta`, deltaStr, col.posX + dStyle.x, rowY + dStyle.y, ctx);
             ctx.restore();
           } else if (col.key === 'avgHr') {
             ctx.save();
@@ -7081,7 +7111,10 @@ export class OverlayRenderer {
             ctx.fillStyle = hrStyle.color;
             ctx.font = hrStyle.font;
             const hr = it.avgHr || it.hr || it.heartRate;
-            ctx.fillText(hr ? `${Math.round(hr)}` : '--', col.posX + hrStyle.x, rowY + hrStyle.y);
+            const hrStr = hr ? `${Math.round(hr)}` : '--';
+            ctx.fillText(hrStr, col.posX + hrStyle.x, rowY + hrStyle.y);
+            this.recordTextBoundFromDraw(widgetKey, `split_avgHr_${idx}`, `Split ${idx + 1} HR`, hrStr, col.posX + hrStyle.x, rowY + hrStyle.y, ctx);
+            this.recordTextBoundFromDraw(widgetKey, `avgHr_${idx}`, `Split ${idx + 1} HR`, hrStr, col.posX + hrStyle.x, rowY + hrStyle.y, ctx);
             ctx.restore();
           } else if (col.key === 'maxHr') {
             ctx.save();

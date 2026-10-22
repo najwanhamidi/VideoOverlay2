@@ -16436,6 +16436,9 @@ function updateSplitsDropdownAndTable() {
 
 
   renderSplitRowRenamerList();
+  if (typeof populateSubParts === 'function' && state.selectedWidget === 'splits') {
+    populateSubParts('splits');
+  }
 
 
 
@@ -22324,81 +22327,30 @@ function setupElementInspectorControls() {
 
 
     if (category === 'splits') {
-
-
-
-      const splits = (state.activity && state.activity.splits) ? state.activity.splits : [];
-
-
-
+      const act = state.currentActivity || state.activity;
+      const isLapSource = state.config?.splitDataSource === 'laps' && act?.hasLaps;
+      const splits = isLapSource
+        ? (act?.laps && act.laps.length > 0 ? act.laps : (act?.splits || []))
+        : (act?.splits && act.splits.length > 0 ? act.splits : (act?.laps || []));
       const count = splits.length > 0 ? splits.length : 8;
-
-
-
       for (let idx = 0; idx < count; idx++) {
-
-
-
         const it = splits[idx];
-
-
-
-        const sName = it ? (it.shortName || `L${idx + 1}`) : `L${idx + 1}`;
-
-
-
+        const sName = it ? (it.shortName || it.name || `L${idx + 1}`) : `L${idx + 1}`;
         const pStr = it ? (it.paceFormatted || '').split(' ')[0] : '5:00';
-
-
-
         base.push(
-
-
-
           { key: `split_lap_${idx}`, label: `Split ${idx + 1} Lap Label (${sName})` },
-
-
-
           { key: `split_pace_${idx}`, label: `Split ${idx + 1} Pace Text (${pStr})` },
-
-
-
           { key: `split_avgHr_${idx}`, label: `Split ${idx + 1} Heart Rate (HR)` },
-
-
-
           { key: `split_time_${idx}`, label: `Split ${idx + 1} Time` },
-
-
-
           { key: `split_delta_${idx}`, label: `Split ${idx + 1} Delta` },
-
-
-
           { key: `split_elevation_${idx}`, label: `Split ${idx + 1} Elevation` },
-
-
-
           { key: `split_cadence_${idx}`, label: `Split ${idx + 1} Cadence` },
-
-
-
+          { key: `split_maxHr_${idx}`, label: `Split ${idx + 1} Max HR` },
+          { key: `split_minHr_${idx}`, label: `Split ${idx + 1} Min HR` },
           { key: `split_bar_${idx}`, label: `Split ${idx + 1} Bar / Column (${sName})` },
-
-
-
           { key: `split_${idx}`, label: `Split ${idx + 1} Entire Item (${sName})` }
-
-
-
         );
-
-
-
       }
-
-
-
     }
 
 
@@ -30814,12 +30766,36 @@ function setupTextAndStickersControls() {
     textTabElementColorInput.addEventListener('input', (e) => {
       const val = e.target.value;
       if (textTabElementColorHex) textTabElementColorHex.value = val;
-      if (state.selectedTextKey && renderer && renderer.textBounds && renderer.textBounds[state.selectedTextKey]) {
-        const tb = renderer.textBounds[state.selectedTextKey];
-        if (!state.config.widgetElementOffsets) state.config.widgetElementOffsets = {};
+      const activeKeys = (state.selectedTextKeys && state.selectedTextKeys.length > 0)
+        ? state.selectedTextKeys
+        : (state.selectedTextKey ? [state.selectedTextKey] : []);
+      if (!state.config.widgetElementOffsets) state.config.widgetElementOffsets = {};
+      for (const k of activeKeys) {
+        const tb = renderer && renderer.textBounds && renderer.textBounds[k];
+        if (!tb) continue;
         if (!state.config.widgetElementOffsets[tb.widgetKey]) state.config.widgetElementOffsets[tb.widgetKey] = {};
         if (!state.config.widgetElementOffsets[tb.widgetKey][tb.partKey]) state.config.widgetElementOffsets[tb.widgetKey][tb.partKey] = { x: 0, y: 0, z: 1 };
         state.config.widgetElementOffsets[tb.widgetKey][tb.partKey].color = val;
+      }
+      triggerRender();
+    });
+  }
+  if (textTabElementColorHex) {
+    textTabElementColorHex.addEventListener('input', (e) => {
+      const val = e.target.value.trim();
+      if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(val)) {
+        if (textTabElementColorInput) textTabElementColorInput.value = val;
+        const activeKeys = (state.selectedTextKeys && state.selectedTextKeys.length > 0)
+          ? state.selectedTextKeys
+          : (state.selectedTextKey ? [state.selectedTextKey] : []);
+        if (!state.config.widgetElementOffsets) state.config.widgetElementOffsets = {};
+        for (const k of activeKeys) {
+          const tb = renderer && renderer.textBounds && renderer.textBounds[k];
+          if (!tb) continue;
+          if (!state.config.widgetElementOffsets[tb.widgetKey]) state.config.widgetElementOffsets[tb.widgetKey] = {};
+          if (!state.config.widgetElementOffsets[tb.widgetKey][tb.partKey]) state.config.widgetElementOffsets[tb.widgetKey][tb.partKey] = { x: 0, y: 0, z: 1 };
+          state.config.widgetElementOffsets[tb.widgetKey][tb.partKey].color = val;
+        }
         triggerRender();
       }
     });
@@ -34783,10 +34759,24 @@ function populateGizmoSubPartDropdown(widgetKey, activePart) {
   const optBorder = new Option('🔲 Card / Border', 'border');
   sel.add(optBorder);
 
+  const seenParts = new Set(['widget', 'border', 'bg']);
   if (renderer && renderer.textBounds) {
     for (const [k, tb] of Object.entries(renderer.textBounds)) {
-      if (tb.widgetKey === baseKey) {
+      if (tb.widgetKey === baseKey && !seenParts.has(tb.partKey)) {
+        seenParts.add(tb.partKey);
         const optText = new Option(`✏️ ${tb.label || tb.partKey}`, tb.partKey);
+        sel.add(optText);
+      }
+    }
+  }
+
+  // Also include any sub-parts from getSubPartsForWidget that aren't already added
+  if (typeof getSubPartsForWidget === 'function') {
+    const subParts = getSubPartsForWidget(baseKey);
+    for (const sp of subParts) {
+      if (!seenParts.has(sp.key)) {
+        seenParts.add(sp.key);
+        const optText = new Option(`📍 ${sp.label || sp.key}`, sp.key);
         sel.add(optText);
       }
     }
