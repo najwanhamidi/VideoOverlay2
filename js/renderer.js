@@ -141,8 +141,26 @@ export class OverlayRenderer {
     else if (baseline === 'bottom') boxY = drawY - textH;
     else boxY = drawY - textH * 0.82;
 
-    this.recordTextBound(widgetKey, partKey, label, boxX, boxY, textW, textH, textStr, {
-      align, baseline, fontSize, color: ctx.fillStyle
+    let finalX = boxX;
+    let finalY = boxY;
+    let finalW = textW;
+    let finalH = textH;
+    let rot = 0;
+
+    const m = ctx.getTransform ? ctx.getTransform() : null;
+    const sm = this._scaleMultiplier || 1;
+    if (m) {
+      rot = Math.round(Math.atan2(m.b, m.a) * (180 / Math.PI));
+      const localCx = boxX + textW / 2;
+      const localCy = boxY + textH / 2;
+      const worldCx = (m.a * localCx + m.c * localCy + m.e) / sm;
+      const worldCy = (m.b * localCx + m.d * localCy + m.f) / sm;
+      finalX = worldCx - textW / 2;
+      finalY = worldCy - textH / 2;
+    }
+
+    this.recordTextBound(widgetKey, partKey, label, finalX, finalY, finalW, finalH, textStr, {
+      align, baseline, fontSize, color: ctx.fillStyle, rotation: rot
     });
   }
 
@@ -1012,23 +1030,26 @@ export class OverlayRenderer {
     this.textBounds = {};
     this.currentConfig = config;
 
-    const origFillText = ctx.fillText;
+        const origFillText = ctx.fillText;
     const self = this;
     ctx.fillText = function(textStr, fx, fy, maxWidth) {
-      if (textStr !== undefined && textStr !== null && String(textStr).trim() !== '' && self._currentActiveWidget && !config.isWeeklyMode) {
+      if (textStr !== undefined && textStr !== null && String(textStr).trim() !== '' && !config.isWeeklyMode) {
         const s = String(textStr).trim();
-        const wKey = self._currentActiveWidget;
+        const wKey = self._currentActiveWidget || 'general';
         let pKey = null;
         let pLabel = null;
+
         if (wKey === 'header') {
           if (self._headerTitleStr && (s === self._headerTitleStr.trim() || s === self._headerTitleStr.trim().toUpperCase())) {
             pKey = 'title'; pLabel = 'Header Title';
-          } else if (self._headerSubStr && (s.includes(self._headerSubStr.trim()) || s.includes(self._headerSubStr.trim().toUpperCase()))) {
+          } else if (self._headerSubStr && (s.includes(self._headerSubStr.trim()) || self._headerSubStr.includes(s) || s.includes(self._headerSubStr.trim().toUpperCase()))) {
             pKey = 'subtitle'; pLabel = 'Date & Subtitle';
-          } else if (self._headerRunnerStr && s.includes(self._headerRunnerStr.trim())) {
+          } else if (self._headerRunnerStr && (s.includes(self._headerRunnerStr.trim()) || self._headerRunnerStr.includes(s))) {
             pKey = 'runner'; pLabel = 'Runner Tag';
-          } else if (self._headerLocationStr && s.includes(self._headerLocationStr.trim())) {
+          } else if (self._headerLocationStr && (s.includes(self._headerLocationStr.trim()) || self._headerLocationStr.includes(s))) {
             pKey = 'location'; pLabel = 'Location';
+          } else if (self._headerWeatherStr && (s.includes(self._headerWeatherStr.trim()) || self._headerWeatherStr.includes(s))) {
+            pKey = 'weather'; pLabel = 'Weather';
           }
         } else if (wKey === 'hero') {
           if (self._heroValStr && s === String(self._heroValStr).trim()) {
@@ -1038,16 +1059,43 @@ export class OverlayRenderer {
           } else if (self._heroUnitStr && (s === self._heroUnitStr.trim() || s === self._heroUnitStr.trim().toUpperCase())) {
             pKey = 'unit'; pLabel = 'Hero Unit';
           }
-        } else if (wKey === 'metrics' && self._activeMetricItem) {
-          if (s === String(self._activeMetricItem.val).trim()) {
-            pKey = `${self._activeMetricItem.key}_val`; pLabel = `${self._activeMetricItem.label} Value`;
-          } else if (s === String(self._activeMetricItem.label).trim() || s === String(self._activeMetricItem.label).trim().toUpperCase()) {
-            pKey = `${self._activeMetricItem.key}_lbl`; pLabel = `${self._activeMetricItem.label} Label`;
+        } else if (wKey === 'metrics') {
+          if (self._cachedMetricsList) {
+            for (const m of self._cachedMetricsList) {
+              const vStr = String(m.val || '').trim();
+              const lStr = String(m.label || '').trim();
+              if (vStr && (s === vStr || s === vStr.toUpperCase())) {
+                pKey = `${m.key}_val`; pLabel = `${m.label} Value`; break;
+              } else if (lStr && (s === lStr || s === lStr.toUpperCase() || lStr.includes(s) || s.includes(lStr))) {
+                pKey = `${m.key}_lbl`; pLabel = `${m.label} Label`; break;
+              }
+            }
           }
+        } else if (wKey === 'splits') {
+          if (s.toUpperCase().includes('SPLIT') || s.toUpperCase().includes('LAP') || s.toUpperCase().includes('KILOMETER')) {
+            pKey = 'title'; pLabel = 'Splits Chart Title';
+          } else if (typeof self._currentSplitIdx === 'number') {
+            pKey = `lap_${self._currentSplitIdx}`; pLabel = `Split ${self._currentSplitIdx + 1} Label`;
+          }
+        } else if (wKey === 'splitHighlight') {
+          if (s.length <= 12 && (s.toUpperCase().includes('SPLIT') || s.toUpperCase().includes('FASTEST') || s.toUpperCase().includes('BEST') || s.toUpperCase().includes('KM') || s.toUpperCase().includes('MILE'))) {
+            pKey = 'badge'; pLabel = 'Highlight Badge';
+          } else if (self._splitHighlightVal && s === String(self._splitHighlightVal).trim()) {
+            pKey = 'val'; pLabel = 'Highlight Value';
+          } else {
+            pKey = 'sec'; pLabel = 'Highlight Secondary';
+          }
+        } else if (wKey === 'brand') {
+          pKey = 'brandText'; pLabel = 'Brand Watermark';
         }
-        if (pKey) {
-          self.recordTextBoundFromDraw(wKey, pKey, pLabel, String(textStr), fx, fy, this);
+
+        if (!pKey) {
+          const clean = s.toLowerCase().replace(/[^a-z0-9]+/g, '_').substring(0, 12) || 'txt';
+          pKey = `${clean}_${self._textCounter++}`;
+          pLabel = `${wKey.toUpperCase()} "${s.substring(0, 12)}"`;
         }
+
+        self.recordTextBoundFromDraw(wKey, pKey, pLabel, String(textStr), fx, fy, this);
       }
       return origFillText.apply(this, arguments);
     };
@@ -5061,6 +5109,8 @@ export class OverlayRenderer {
   // Designs: 'grid', 'strip', 'badges', 'compact', 'circular-gauges', 'editorial-table', 'pill-row'
   // =========================================================================
   drawMetricsGrid(ctx, x, y, width, activity, config, theme, accent, cols = 3, customH = null, widgetKey = 'metrics') {
+    this._currentActiveWidget = widgetKey;
+
     ctx.save();
     const rot = this.applyWidgetRotation(ctx, config, widgetKey, x, y, width, customH || 95);
     const elStyle = this.getElementStyle(config, widgetKey);
@@ -5141,6 +5191,8 @@ export class OverlayRenderer {
     else maxItems = Math.min(metrics.length, 6);
 
     const displayMetrics = metrics.slice(0, maxItems);
+    this._cachedMetricsList = displayMetrics;
+
     const defaultMetH = isVerticalDesign
       ? Math.max(160, displayMetrics.length * 46)
       : ((design === 'cards-2col' || design === 'centered-cross-quad') ? 140 : 80);
@@ -6501,6 +6553,7 @@ export class OverlayRenderer {
 
   // =========================================================================
   drawSplitsBarChart(ctx, x, y, width, activity, config, theme, accent, chartH = 150, widgetKey = 'splits') {
+    this._currentActiveWidget = widgetKey;
     if (config && config.showWidgetSplits === false) return y;
     const offWidget = this.getElementOffset(config, widgetKey, 'widget');
     if (offWidget.hidden) return y;
@@ -7756,6 +7809,8 @@ export class OverlayRenderer {
 
   // =========================================================================
   drawSplitHighlightCard(ctx, x, y, width, activity, config, theme, accent, customH = null, widgetKey = 'splitHighlight') {
+    this._currentActiveWidget = widgetKey;
+
     if (config && config.showWidgetSplitHighlight === false) return y;
     const offWidget = this.getElementOffset(config, widgetKey, 'widget');
     if (offWidget.hidden) return y;
@@ -10733,6 +10788,7 @@ export class OverlayRenderer {
   }
 
   drawBrandWatermark(ctx, x, y, width, config, theme, accent, customH = null, widgetKey = 'brand') {
+    this._currentActiveWidget = widgetKey;
     ctx.save();
     const rot = this.applyWidgetRotation(ctx, config, widgetKey, x, y - 14, width, customH || 28);
     const elStyle = this.getElementStyle(config, widgetKey);

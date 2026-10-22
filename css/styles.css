@@ -1047,6 +1047,26 @@ input:checked + .slider:before {
   background: #00f0ff;
   border-color: #000;
 }
+.gizmo-box.mode-text {
+  border: 2px solid #ff007f;
+  box-shadow: 0 0 16px rgba(255, 0, 127, 0.55), inset 0 0 12px rgba(255, 0, 127, 0.12);
+}
+.gizmo-box.mode-text .gizmo-header {
+  border-color: #ff007f;
+}
+.gizmo-box.mode-text .gizmo-title {
+  color: #ff007f;
+}
+.gizmo-box.mode-text .gizmo-handle {
+  background: #ff007f;
+  border-color: #000;
+}
+.gizmo-box.mode-text .handle-n,
+.gizmo-box.mode-text .handle-s,
+.gizmo-box.mode-text .handle-e,
+.gizmo-box.mode-text .handle-w {
+  display: none !important;
+}
 
 /* ==========================================================================
    ANIMATION PLAYER DOCK & VIDEO EXPORT MODAL STYLES

@@ -2062,11 +2062,23 @@ function deleteSelectedTarget(targetKey = null) {
 
   pushUndoSnapshot();
 
-
-
-
-
-
+  // 0. Check if an individual text element is selected in Single Activity mode
+  if (state.selectedTextKey && renderer && renderer.textBounds && renderer.textBounds[state.selectedTextKey]) {
+    const tb = renderer.textBounds[state.selectedTextKey];
+    if (!state.config.widgetElementOffsets) state.config.widgetElementOffsets = {};
+    if (!state.config.widgetElementOffsets[tb.widgetKey]) state.config.widgetElementOffsets[tb.widgetKey] = {};
+    if (!state.config.widgetElementOffsets[tb.widgetKey][tb.partKey]) {
+      state.config.widgetElementOffsets[tb.widgetKey][tb.partKey] = { x: 0, y: 0, z: 1 };
+    }
+    state.config.widgetElementOffsets[tb.widgetKey][tb.partKey].hidden = true;
+    const lbl = tb.label || tb.partKey;
+    showToast(`Hidden "${lbl}"`);
+    state.selectedTextKey = null;
+    state.selectedTextKeys = [];
+    triggerRender();
+    updateGizmoBox();
+    return;
+  }
 
   // 1. Check if it's a custom text sticker
 
@@ -2784,42 +2796,66 @@ let isDraggingSingleText = false;
 let singleTextDragStart = { x: 0, y: 0 };
 let singleTextInitialOffset = { x: 0, y: 0 };
 let activeDragTextKey = null;
+let dragInitialTextOffsets = {};
 
 function startSingleTextDrag(clientX, clientY, widgetKey, partKey) {
   isDraggingSingleText = true;
+  activeDragMode = 'text_move';
+  isInteracting = true;
+  dragStartX = clientX;
+  dragStartY = clientY;
   activeDragTextKey = { widgetKey, partKey };
-  singleTextDragStart = { x: clientX, y: clientY };
   const off = (state.config.widgetElementOffsets && state.config.widgetElementOffsets[widgetKey] && state.config.widgetElementOffsets[widgetKey][partKey]) || { x: 0, y: 0 };
-  singleTextInitialOffset = { x: typeof off.x === 'number' ? off.x : 0, y: typeof off.y === 'number' ? off.y : 0 };
+  dragInitialPos = { x: typeof off.x === 'number' ? off.x : 0, y: typeof off.y === 'number' ? off.y : 0 };
+  singleTextDragStart = { x: clientX, y: clientY };
+  singleTextInitialOffset = { ...dragInitialPos };
+
+  dragInitialTextOffsets = {};
+  const activeKeys = (state.selectedTextKeys && state.selectedTextKeys.length > 0)
+    ? state.selectedTextKeys
+    : (state.selectedTextKey ? [state.selectedTextKey] : [`${widgetKey}__${partKey}`]);
+  for (const k of activeKeys) {
+    if (renderer && renderer.textBounds && renderer.textBounds[k]) {
+      const itemTb = renderer.textBounds[k];
+      const itemOff = (state.config.widgetElementOffsets && state.config.widgetElementOffsets[itemTb.widgetKey] && state.config.widgetElementOffsets[itemTb.widgetKey][itemTb.partKey]) || { x: 0, y: 0 };
+      dragInitialTextOffsets[k] = { x: typeof itemOff.x === 'number' ? itemOff.x : 0, y: typeof itemOff.y === 'number' ? itemOff.y : 0 };
+    }
+  }
+
   pushUndoSnapshot();
 }
 
-function selectSingleText(textKey, clientX = null, clientY = null) {
+function selectSingleText(textKey, clientX = null, clientY = null, isMulti = false) {
   if (!renderer || !renderer.textBounds || !renderer.textBounds[textKey]) return;
   const tb = renderer.textBounds[textKey];
-  state.selectedTextKey = textKey;
+
+  if (isMulti) {
+    if (!state.selectedTextKeys) state.selectedTextKeys = [];
+    if (state.selectedTextKeys.includes(textKey)) {
+      state.selectedTextKeys = state.selectedTextKeys.filter(k => k !== textKey);
+      state.selectedTextKey = state.selectedTextKeys[state.selectedTextKeys.length - 1] || null;
+    } else {
+      state.selectedTextKeys.push(textKey);
+      state.selectedTextKey = textKey;
+    }
+  } else {
+    state.selectedTextKeys = [textKey];
+    state.selectedTextKey = textKey;
+  }
+
+  state.selectedWidget = tb.widgetKey;
   state.selectedWidgetKey = tb.widgetKey;
   state.selectedSubPartKey = tb.partKey;
 
-  // Sync widget selection & inspector
-  selectWidget(tb.widgetKey);
-
   const subPartSelect = document.getElementById('gizmoSubPartSelect');
   if (subPartSelect) {
-    let opt = Array.from(subPartSelect.options).find(o => o.value === tb.partKey);
-    if (!opt) {
-      opt = new Option(tb.label || tb.partKey, tb.partKey);
-      subPartSelect.add(opt);
-    }
-    subPartSelect.value = tb.partKey;
+    populateGizmoSubPartDropdown(tb.widgetKey, tb.partKey);
   }
 
-  // Populate sub-element inspector
   if (typeof updateSubElementInspector === 'function') {
     updateSubElementInspector(tb.widgetKey, tb.partKey);
   }
 
-  // Populate Text Tab top editor
   syncTextTabEditor(textKey);
 
   if (clientX !== null && clientY !== null) {
@@ -2827,8 +2863,8 @@ function selectSingleText(textKey, clientX = null, clientY = null) {
   }
 
   triggerRender();
+  updateGizmoBox();
 }
-
 window.selectSingleText = selectSingleText;
 window.syncTextTabEditor = syncTextTabEditor;
 
@@ -3071,7 +3107,17 @@ function setupKeyboardShortcuts() {
 
 
 
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && !isInputActive) {
+    const isTypingText = (document.activeElement?.tagName === 'TEXTAREA') ||
+      (document.activeElement?.tagName === 'INPUT' && ['text', 'search', 'url', 'password', 'number', 'email'].includes(document.activeElement?.type)) ||
+      document.activeElement?.isContentEditable;
+
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && !isTypingText) {
+      e.preventDefault();
+      const dx = e.key === 'ArrowRight' ? 1 : (e.key === 'ArrowLeft' ? -1 : 0);
+      const dy = e.key === 'ArrowDown' ? 1 : (e.key === 'ArrowUp' ? -1 : 0);
+      const step = e.shiftKey ? 10 : (e.altKey ? 1 : 2);
+
+      // 1. Weekly Mode
       const isWeeklyTab = state.currentTab === 'weekly' || document.getElementById('tabWeeklyRecap')?.classList.contains('active') || state.isWeeklyMode;
       const weeklySelection = typeof getWeeklySelectedItems === 'function' ? getWeeklySelectedItems() : { textKeys: [], cardKeys: [] };
       const curTKey = state.weeklyData?.selectedTextKey;
@@ -3081,456 +3127,133 @@ function setupKeyboardShortcuts() {
       const hasWeeklySelection = allWeeklyTexts.length > 0 || allWeeklyCards.length > 0;
 
       if (isWeeklyTab && hasWeeklySelection) {
-        e.preventDefault();
-        const dx = e.key === 'ArrowRight' ? 1 : (e.key === 'ArrowLeft' ? -1 : 0);
-        const dy = e.key === 'ArrowDown' ? 1 : (e.key === 'ArrowUp' ? -1 : 0);
-        const step = e.shiftKey ? 10 : (e.altKey ? 1 : 2);
         moveWeeklySelected(dx, dy, step);
         return;
       }
-      if (state.selectedTextKey && renderer && renderer.textBounds && renderer.textBounds[state.selectedTextKey]) {
-        e.preventDefault();
-        const dx = e.key === 'ArrowRight' ? 1 : (e.key === 'ArrowLeft' ? -1 : 0);
-        const dy = e.key === 'ArrowDown' ? 1 : (e.key === 'ArrowUp' ? -1 : 0);
-        const step = e.shiftKey ? 10 : 1;
-        const tb = renderer.textBounds[state.selectedTextKey];
+
+      // 2. Single Activity mode - Multiple or single text elements selected:
+      const activeTextKeys = (state.selectedTextKeys && state.selectedTextKeys.length > 0)
+        ? state.selectedTextKeys
+        : (state.selectedTextKey ? [state.selectedTextKey] : []);
+
+      if (activeTextKeys.length > 0) {
+        if (!arrowKeyUndoTimer) pushUndoSnapshot();
+        clearTimeout(arrowKeyUndoTimer);
+        arrowKeyUndoTimer = setTimeout(() => { arrowKeyUndoTimer = null; }, 400);
+
         if (!state.config.widgetElementOffsets) state.config.widgetElementOffsets = {};
-        if (!state.config.widgetElementOffsets[tb.widgetKey]) state.config.widgetElementOffsets[tb.widgetKey] = {};
-        if (!state.config.widgetElementOffsets[tb.widgetKey][tb.partKey]) state.config.widgetElementOffsets[tb.widgetKey][tb.partKey] = { x: 0, y: 0, z: 1 };
-        const obj = state.config.widgetElementOffsets[tb.widgetKey][tb.partKey];
-        obj.x = (typeof obj.x === 'number' ? obj.x : 0) + dx * step;
-        obj.y = (typeof obj.y === 'number' ? obj.y : 0) + dy * step;
-        updateSubElementInspector(tb.widgetKey, tb.partKey);
+        for (const tKey of activeTextKeys) {
+          const tb = renderer.textBounds && renderer.textBounds[tKey];
+          if (!tb) continue;
+          if (!state.config.widgetElementOffsets[tb.widgetKey]) state.config.widgetElementOffsets[tb.widgetKey] = {};
+          if (!state.config.widgetElementOffsets[tb.widgetKey][tb.partKey]) {
+            state.config.widgetElementOffsets[tb.widgetKey][tb.partKey] = { x: 0, y: 0, z: 1 };
+          }
+          const obj = state.config.widgetElementOffsets[tb.widgetKey][tb.partKey];
+          obj.x = (typeof obj.x === 'number' ? obj.x : 0) + dx * step;
+          obj.y = (typeof obj.y === 'number' ? obj.y : 0) + dy * step;
+        }
+
+        if (state.selectedTextKey && renderer.textBounds && renderer.textBounds[state.selectedTextKey]) {
+          const mainTb = renderer.textBounds[state.selectedTextKey];
+          if (typeof updateSubElementInspector === 'function') {
+            updateSubElementInspector(mainTb.widgetKey, mainTb.partKey);
+          }
+        }
         triggerRender();
+        updateGizmoBox();
         return;
       }
 
-
-
-
+      // 3. Single Activity mode - Sub-part or Border selected:
       if (state.selectedWidget) {
-
-
-
-        e.preventDefault();
-
-
-
-
-
-
-
-        // Push undo snapshot (debounced so rapid arrow key presses create a single undo step)
-
-
-
-        if (!arrowKeyUndoTimer) {
-
-
-
-          pushUndoSnapshot();
-
-
-
-        }
-
-
-
-        clearTimeout(arrowKeyUndoTimer);
-
-
-
-        arrowKeyUndoTimer = setTimeout(() => {
-
-
-
-          arrowKeyUndoTimer = null;
-
-
-
-        }, 400);
-
-
-
-
-
-
-
-        const dx = e.key === 'ArrowRight' ? 1 : (e.key === 'ArrowLeft' ? -1 : 0);
-
-
-
-        const dy = e.key === 'ArrowDown' ? 1 : (e.key === 'ArrowUp' ? -1 : 0);
-
-
-
-
-
-
-
-        const g = state.config.gridSize || 20;
-
-
-
-        let step = g;
-
-
-
-        if (e.shiftKey) step = g * 5;
-
-
-
-        if (e.altKey) step = 1;
-
-
-
-
-
-
-
-        const subPartSelect = document.getElementById('inspectorSubPartSelect');
-
-
-
-        const currentPart = subPartSelect ? subPartSelect.value : 'widget';
-
-
-
-
-
-
+        const subPartSelect = document.getElementById('gizmoSubPartSelect') || document.getElementById('inspectorSubPartSelect');
+        const currentPart = subPartSelect ? subPartSelect.value : (state.selectedSubPartKey || 'widget');
 
         if (currentPart && currentPart !== 'widget' && currentPart !== 'bg') {
-
-
-
-          // Move selected sub-element
-
-
+          if (!arrowKeyUndoTimer) pushUndoSnapshot();
+          clearTimeout(arrowKeyUndoTimer);
+          arrowKeyUndoTimer = setTimeout(() => { arrowKeyUndoTimer = null; }, 400);
 
           if (!state.config.widgetElementOffsets) state.config.widgetElementOffsets = {};
-
-
-
           if (!state.config.widgetElementOffsets[state.selectedWidget]) state.config.widgetElementOffsets[state.selectedWidget] = {};
-
-
-
           if (!state.config.widgetElementOffsets[state.selectedWidget][currentPart]) {
-
-
-
             state.config.widgetElementOffsets[state.selectedWidget][currentPart] = { x: 0, y: 0, z: 1 };
-
-
-
           }
-
-
-
-          const off = state.config.widgetElementOffsets[state.selectedWidget][currentPart];
-
-
-
-          const moveStep = e.altKey ? 1 : (e.shiftKey ? 10 : 5);
-
-
-
-          off.x = (off.x || 0) + dx * moveStep;
-
-
-
-          off.y = (off.y || 0) + dy * moveStep;
-
-
-
+          const obj = state.config.widgetElementOffsets[state.selectedWidget][currentPart];
+          obj.x = (typeof obj.x === 'number' ? obj.x : 0) + dx * step;
+          obj.y = (typeof obj.y === 'number' ? obj.y : 0) + dy * step;
+          if (typeof updateSubElementInspector === 'function') {
+            updateSubElementInspector(state.selectedWidget, currentPart);
+          }
           triggerRender();
-
-
-
-          if (window.syncInspectorWithSelectedElement) {
-
-
-
-            window.syncInspectorWithSelectedElement(state.selectedWidget, currentPart);
-
-
-
-          }
-
-
-
+          updateGizmoBox();
+          return;
         } else if (state.selectedWidget === '__bg_photo__') {
-
-
+          if (!arrowKeyUndoTimer) pushUndoSnapshot();
+          clearTimeout(arrowKeyUndoTimer);
+          arrowKeyUndoTimer = setTimeout(() => { arrowKeyUndoTimer = null; }, 400);
 
           state.config.photoPanX = (state.config.photoPanX || 0) + dx * step;
-
-
-
           state.config.photoPanY = (state.config.photoPanY || 0) + dy * step;
-
-
-
           triggerRender();
-
-
-
-          if (window.syncInspectorWithSelectedElement) {
-
-
-
-            window.syncInspectorWithSelectedElement('__bg_photo__');
-
-
-
-          }
-
-
-
+          updateGizmoBox();
+          return;
         } else if (state.selectedWidget.endsWith('_bg')) {
-
-
+          if (!arrowKeyUndoTimer) pushUndoSnapshot();
+          clearTimeout(arrowKeyUndoTimer);
+          arrowKeyUndoTimer = setTimeout(() => { arrowKeyUndoTimer = null; }, 400);
 
           const baseKey = state.selectedWidget.replace(/_bg$/, '');
-
-
-
           if (!state.config.widgetBgStyles) state.config.widgetBgStyles = {};
-
-
-
           if (!state.config.widgetBgStyles[baseKey]) state.config.widgetBgStyles[baseKey] = {};
-
-
-
           const bg = state.config.widgetBgStyles[baseKey];
-
-
-
-          let curX = bg.offsetX || 0;
-
-
-
-          let curY = bg.offsetY || 0;
-
-
-
-          if (state.config.snapToGrid && !e.altKey) {
-
-
-
-            curX = (Math.round(curX / g) + dx * Math.max(1, Math.round(step / g))) * g;
-
-
-
-            curY = (Math.round(curY / g) + dy * Math.max(1, Math.round(step / g))) * g;
-
-
-
-          } else {
-
-
-
-            curX += dx * step;
-
-
-
-            curY += dy * step;
-
-
-
-          }
-
-
-
-          bg.offsetX = curX;
-
-
-
-          bg.offsetY = curY;
-
-
-
+          bg.offsetX = (bg.offsetX || 0) + dx * step;
+          bg.offsetY = (bg.offsetY || 0) + dy * step;
           triggerRender();
-
-
-
-          if (window.syncInspectorWithSelectedElement) {
-
-
-
-            window.syncInspectorWithSelectedElement(baseKey, 'bg');
-
-
-
-          }
-
-
-
+          updateGizmoBox();
+          return;
         } else {
-
-
-
-          const b = renderer.widgetBounds ? renderer.widgetBounds[state.selectedWidget] : null;
-
-
+          // 4. Whole Widget move:
+          if (!arrowKeyUndoTimer) pushUndoSnapshot();
+          clearTimeout(arrowKeyUndoTimer);
+          arrowKeyUndoTimer = setTimeout(() => { arrowKeyUndoTimer = null; }, 400);
 
           if (!state.config.widgetPositions) state.config.widgetPositions = {};
-
-
-
-          const cur = state.config.widgetPositions[state.selectedWidget] || (b ? { x: b.x, y: b.y, width: b.width, height: b.height } : { x: 0, y: 0, width: 200, height: 100 });
-
-
-
-          let curX = cur.x !== undefined ? cur.x : (b ? b.x : 0);
-
-
-
-          let curY = cur.y !== undefined ? cur.y : (b ? b.y : 0);
-
-
-
-          if (state.config.snapToGrid && !e.altKey) {
-
-
-
-            curX = (Math.round(curX / g) + dx * Math.max(1, Math.round(step / g))) * g;
-
-
-
-            curY = (Math.round(curY / g) + dy * Math.max(1, Math.round(step / g))) * g;
-
-
-
-          } else {
-
-
-
-            curX += dx * step;
-
-
-
-            curY += dy * step;
-
-
-
-          }
-
-
-
-          state.config.widgetPositions[state.selectedWidget] = {
-            ...cur,
-            x: curX,
-            y: curY
-          };
-          if (state.config.customTexts && Array.isArray(state.config.customTexts)) {
-            const ct = state.config.customTexts.find(t => t.id === state.selectedWidget);
-            if (ct) {
-              ct.x = curX;
-              ct.y = curY;
+          const b = renderer.widgetBounds[state.selectedWidget];
+          if (b) {
+            if (!state.config.widgetPositions[state.selectedWidget]) {
+              state.config.widgetPositions[state.selectedWidget] = { x: b.x, y: b.y, width: b.width, height: b.height };
             }
+            const wp = state.config.widgetPositions[state.selectedWidget];
+            wp.x = (typeof wp.x === 'number' ? wp.x : b.x) + dx * step;
+            wp.y = (typeof wp.y === 'number' ? wp.y : b.y) + dy * step;
+
+            if (state.config.customTexts && Array.isArray(state.config.customTexts)) {
+              const ct = state.config.customTexts.find(t => t.id === state.selectedWidget);
+              if (ct) {
+                ct.x = wp.x;
+                ct.y = wp.y;
+              }
+            }
+            if (state.config.customShapes && Array.isArray(state.config.customShapes)) {
+              const cs = state.config.customShapes.find(s => s.id === state.selectedWidget);
+              if (cs) {
+                cs.x = wp.x;
+                cs.y = wp.y;
+              }
+            }
+            triggerRender();
+            updateGizmoBox();
+            return;
           }
-
-
-
-          if (state.config.snapToGrid) {
-
-
-
-            state.config.isDraggingGrid = true;
-
-
-
-            clearTimeout(arrowKeyGridTimer);
-
-
-
-            arrowKeyGridTimer = setTimeout(() => {
-
-
-
-              state.config.isDraggingGrid = false;
-
-
-
-              triggerRender();
-
-
-
-            }, 350);
-
-
-
-          }
-
-
-
-          triggerRender();
-
-
-
-          if (window.syncInspectorWithSelectedElement) {
-
-
-
-            window.syncInspectorWithSelectedElement(state.selectedWidget, 'widget');
-
-
-
-          }
-
-
-
         }
-
-
-
-
-
-
-
-        updateGizmoBox();
-
-
-
-        if (typeof updateFloatingToolbarPosition === 'function') {
-
-
-
-          updateFloatingToolbarPosition();
-
-
-
-        }
-
-
-
       }
-
-
-
     }
-
-
-
   });
-
-
-
 }
 
-
-
-
-
-
-
 // ==========================================
-
-
-
 // WORKSPACE PREVIEW ZOOM CONTROLLER
 
 
@@ -32483,10 +32206,17 @@ function setupGizmoController() {
 
 
     gizmoRestoreBtn.addEventListener('click', () => {
-
-
-
-      if (state.selectedWidget === '__bg_photo__') {
+      if (state.selectedTextKey && renderer && renderer.textBounds && renderer.textBounds[state.selectedTextKey]) {
+        const tb = renderer.textBounds[state.selectedTextKey];
+        pushUndoSnapshot();
+        if (state.config.widgetElementOffsets?.[tb.widgetKey]?.[tb.partKey]) {
+          delete state.config.widgetElementOffsets[tb.widgetKey][tb.partKey];
+        }
+        showToast(`Restored "${tb.label || tb.partKey}" to original template`);
+        triggerRender();
+        updateGizmoBox();
+        return;
+      } else if (state.selectedWidget === '__bg_photo__') {
 
 
 
@@ -32622,51 +32352,6 @@ function setupGizmoController() {
 
 
 
-  const gizmoSubPartSelect = document.getElementById('gizmoSubPartSelect');
-
-
-
-  if (gizmoSubPartSelect) {
-
-
-
-    gizmoSubPartSelect.addEventListener('change', (e) => {
-
-
-
-      if (!state.selectedWidget) return;
-
-
-
-      const baseKey = state.selectedWidget.replace(/_bg$/, '');
-
-
-
-      if (e.target.value === 'border') {
-
-
-
-        selectWidget(baseKey + '_bg');
-
-
-
-      } else {
-
-
-
-        selectWidget(baseKey);
-
-
-
-      }
-
-
-
-    });
-
-
-
-  }
 
 
 
@@ -32743,6 +32428,31 @@ function setupGizmoController() {
 
 
   window.isPointInWidget = isPointInWidget;
+
+  // Helper to resolve widget under point, prioritizing primary widgets over card/borders
+  const getWidgetAtPoint = (px, py) => {
+    const bounds = renderer.widgetBounds || {};
+    const entries = Object.entries(bounds).reverse();
+
+    // 1. Primary widgets first (header, hero, metrics, splits, map, brand, custom texts, shapes)
+    for (const [key, b] of entries) {
+      if (key === '__bg_photo__' || key.endsWith('_bg')) continue;
+      if (isPointInWidget(px, py, b)) {
+        return key;
+      }
+    }
+
+    // 2. Fall back to isolated/offset border cards if no primary widget matched
+    for (const [key, b] of entries) {
+      if (key === '__bg_photo__' || !key.endsWith('_bg')) continue;
+      if (isPointInWidget(px, py, b)) {
+        return key;
+      }
+    }
+    return null;
+  };
+  window.getWidgetAtPoint = getWidgetAtPoint;
+
 
 
 
@@ -32994,56 +32704,12 @@ function setupGizmoController() {
     }
 
     // 2. Fall back to widget bounds:
-    let foundKey = null;
-    const bounds = renderer.widgetBounds || {};
-
-
-
-    const entries = Object.entries(bounds).reverse();
-
-
-
-
-
-
-
-    for (const [key, b] of entries) {
-
-
-
-      if (key === '__bg_photo__') continue; // Don't let background photo steal clicks from widgets
-
-
-
-      if (isPointInWidget(clickX, clickY, b)) {
-
-
-
-        foundKey = key;
-
-
-
-        break;
-
-
-
-      }
-
-
-
-    }
-
-
-
-
-
-
+    let foundKey = getWidgetAtPoint(clickX, clickY);
 
     if (foundKey) {
-
-
-
-      selectWidget(foundKey);
+      state.selectedTextKey = null;
+      state.selectedTextKeys = [];
+      selectWidget(foundKey, false);
 
 
 
@@ -33183,24 +32849,7 @@ function setupGizmoController() {
 
       canvas.style.cursor = isHover ? 'move' : 'default';
     } else {
-      if (isDraggingSingleText && activeDragTextKey) {
-        const rect = canvas.getBoundingClientRect();
-        const scale = canvas.width / rect.width;
-        const dx = (e.clientX - singleTextDragStart.x) * scale;
-        const dy = (e.clientY - singleTextDragStart.y) * scale;
-        const { widgetKey, partKey } = activeDragTextKey;
-        if (!state.config.widgetElementOffsets) state.config.widgetElementOffsets = {};
-        if (!state.config.widgetElementOffsets[widgetKey]) state.config.widgetElementOffsets[widgetKey] = {};
-        if (!state.config.widgetElementOffsets[widgetKey][partKey]) state.config.widgetElementOffsets[widgetKey][partKey] = { x: 0, y: 0, z: 1 };
-        const obj = state.config.widgetElementOffsets[widgetKey][partKey];
-        obj.x = Math.round(singleTextInitialOffset.x + dx);
-        obj.y = Math.round(singleTextInitialOffset.y + dy);
-        updateSubElementInspector(widgetKey, partKey);
-        triggerRender();
-        return;
-      }
-
-      if (!isDraggingWidget) {
+      if (!isInteracting) {
         const rect = canvas.getBoundingClientRect();
         const scale = canvas.width / rect.width;
         const mouseX = (e.clientX - rect.left) * scale;
@@ -33217,6 +32866,9 @@ function setupGizmoController() {
         }
         if (isHover) {
           canvas.style.cursor = 'move';
+        } else {
+          const hoveredWidget = getWidgetAtPoint(mouseX, mouseY);
+          canvas.style.cursor = hoveredWidget ? 'move' : 'default';
         }
       }
     }
@@ -33227,7 +32879,7 @@ function setupGizmoController() {
 
     window._weeklyShiftKeyActive = !!(e.shiftKey || e.ctrlKey || e.metaKey);
 
-    if (e.button === 0) handlePointerDown(e.clientX, e.clientY);
+    if (e.button === 0) handlePointerDown(e.clientX, e.clientY, e);
 
   });
 
@@ -33355,127 +33007,69 @@ function setupGizmoController() {
 
 
 
-  const handleGizmoPointerDown = (clientX, clientY) => {
+  const handleGizmoPointerDown = (clientX, clientY, e = null) => {
+    const isMulti = e && (e.shiftKey || e.ctrlKey || e.metaKey);
+    const rect = canvas.getBoundingClientRect();
+    const scale = canvas.width / rect.width;
+    const clickX = (clientX - rect.left) * scale;
+    const clickY = (clientY - rect.top) * scale;
 
-
-
-    if (state.selectedWidget === '__bg_photo__') {
-
-
-
-      const rect = canvas.getBoundingClientRect();
-
-
-
-      const scale = canvas.width / rect.width;
-
-
-
-      const clickX = (clientX - rect.left) * scale;
-
-
-
-      const clickY = (clientY - rect.top) * scale;
-
-
-
-
-
-
-
-      let foundKey = null;
-
-
-
-      const bounds = renderer.widgetBounds || {};
-
-
-
-      const entries = Object.entries(bounds).reverse();
-
-
-
-
-
-
-
-      for (const [key, b] of entries) {
-
-
-
-        if (key === '__bg_photo__') continue;
-
-
-
-        if (isPointInWidget(clickX, clickY, b)) {
-
-
-
-          foundKey = key;
-
-
-
-          break;
-
-
-
+    // 1. Check if clicking on ANY text bound first!
+    let foundTextKey = null;
+    let minTextDist = Infinity;
+    const tBounds = renderer.textBounds || {};
+    for (const [key, tb] of Object.entries(tBounds).reverse()) {
+      let tx = clickX;
+      let ty = clickY;
+      if (tb.options && tb.options.rotation) {
+        const cx = tb.x + tb.w / 2;
+        const cy = tb.y + tb.h / 2;
+        const rad = -tb.options.rotation * (Math.PI / 180);
+        tx = Math.cos(rad) * (clickX - cx) - Math.sin(rad) * (clickY - cy) + cx;
+        ty = Math.sin(rad) * (clickX - cx) + Math.cos(rad) * (clickY - cy) + cy;
+      }
+      const pad = 8;
+      if (tx >= tb.x - pad && tx <= tb.x + tb.w + pad &&
+          ty >= tb.y - pad && ty <= tb.y + tb.h + pad) {
+        const dist = Math.hypot(clickX - (tb.x + tb.w / 2), clickY - (tb.y + tb.h / 2));
+        if (dist < minTextDist) {
+          minTextDist = dist;
+          foundTextKey = key;
         }
-
-
-
       }
-
-
-
-
-
-
-
-      if (foundKey) {
-
-
-
-        selectWidget(foundKey);
-
-
-
-        startDragMove(clientX, clientY);
-
-
-
-        return;
-
-
-
-      }
-
-
-
-      startPhotoDrag(clientX, clientY);
-
-
-
-    } else {
-
-
-
-      startDragMove(clientX, clientY);
-
-
-
     }
 
+    if (foundTextKey) {
+      selectSingleText(foundTextKey, clientX, clientY, isMulti);
+      return;
+    }
 
+    // 2. If an individual text is already selected and clicked inside its gizmo:
+    if (state.selectedTextKey && renderer.textBounds && renderer.textBounds[state.selectedTextKey]) {
+      const tb = renderer.textBounds[state.selectedTextKey];
+      startSingleTextDrag(clientX, clientY, tb.widgetKey, tb.partKey);
+      return;
+    }
 
+    // 3. Check if clicking on ANY widget (or border card) at point:
+    let foundKey = getWidgetAtPoint(clickX, clickY);
+    if (foundKey) {
+      state.selectedTextKey = null;
+      state.selectedTextKeys = [];
+      selectWidget(foundKey, false);
+      startDragMove(clientX, clientY);
+      return;
+    }
+
+    // 4. Fall back to photo or current widget move
+    if (state.selectedWidget === '__bg_photo__') {
+      startPhotoDrag(clientX, clientY);
+    } else if (state.selectedWidget) {
+      startDragMove(clientX, clientY);
+    }
   };
 
-
-
-
-
-
-
-  // Gizmo Body Move Drag
+  // Gizmo Body Move Drag// Gizmo Body Move Drag
 
 
 
@@ -33491,7 +33085,7 @@ function setupGizmoController() {
 
 
 
-      handleGizmoPointerDown(e.clientX, e.clientY);
+      handleGizmoPointerDown(e.clientX, e.clientY, e);
 
 
 
@@ -33519,7 +33113,7 @@ function setupGizmoController() {
 
 
 
-      handleGizmoPointerDown(e.touches[0].clientX, e.touches[0].clientY);
+      handleGizmoPointerDown(e.touches[0].clientX, e.touches[0].clientY, e);
 
 
 
@@ -34215,7 +33809,35 @@ function setupGizmoController() {
 
 
 
-    if (activeDragMode === 'move') {
+    if (activeDragMode === 'text_move') {
+      if (Math.hypot(clientX - dragStartX, clientY - dragStartY) < 3) return;
+      const activeKeys = (state.selectedTextKeys && state.selectedTextKeys.length > 0)
+        ? state.selectedTextKeys
+        : (state.selectedTextKey ? [state.selectedTextKey] : []);
+      if (activeKeys.length > 0) {
+        if (!state.config.widgetElementOffsets) state.config.widgetElementOffsets = {};
+        for (const k of activeKeys) {
+          const tb = renderer.textBounds && renderer.textBounds[k];
+          if (!tb) continue;
+          if (!state.config.widgetElementOffsets[tb.widgetKey]) state.config.widgetElementOffsets[tb.widgetKey] = {};
+          if (!state.config.widgetElementOffsets[tb.widgetKey][tb.partKey]) {
+            state.config.widgetElementOffsets[tb.widgetKey][tb.partKey] = { x: 0, y: 0, z: 1 };
+          }
+          const initPos = (dragInitialTextOffsets && dragInitialTextOffsets[k]) || { x: 0, y: 0 };
+          const obj = state.config.widgetElementOffsets[tb.widgetKey][tb.partKey];
+          obj.x = Math.round(initPos.x + deltaX);
+          obj.y = Math.round(initPos.y + deltaY);
+        }
+        if (state.selectedTextKey && renderer.textBounds && renderer.textBounds[state.selectedTextKey]) {
+          const mainTb = renderer.textBounds[state.selectedTextKey];
+          updateSubElementInspector(mainTb.widgetKey, mainTb.partKey);
+        }
+        triggerRender();
+        updateGizmoBox();
+        return;
+      }
+    } else if (activeDragMode === 'move') {
+      if (Math.hypot(clientX - dragStartX, clientY - dragStartY) < 3) return;
 
 
 
@@ -34468,45 +34090,18 @@ function setupGizmoController() {
 
 
   const handlePointerUp = () => {
-
-
-
+    isDraggingSingleText = false;
+    activeDragTextKey = null;
+    dragInitialTextOffsets = {};
     if (isInteracting) {
-
-
-
       isInteracting = false;
-
-
-
       activeDragMode = null;
-
-
-
       activeHandle = null;
-
-
-
       if (state.config.isDraggingGrid) {
-
-
-
         state.config.isDraggingGrid = false;
-
-
-
         triggerRender();
-
-
-
       }
-
-
-
     }
-
-
-
   };
 
 
@@ -34547,35 +34142,7 @@ function setupGizmoController() {
 
 
 
-    const bounds = renderer.widgetBounds || {};
-
-
-
-    for (const [key, b] of Object.entries(bounds).reverse()) {
-
-
-
-      if (key === '__bg_photo__') continue;
-
-
-
-      if (isPointInWidget(hoverX, hoverY, b)) {
-
-
-
-        hoveredWidget = key;
-
-
-
-        break;
-
-
-
-      }
-
-
-
-    }
+    hoveredWidget = getWidgetAtPoint(hoverX, hoverY);
 
 
 
@@ -34719,11 +34286,10 @@ function setupGizmoController() {
 
 
 
+  window.addEventListener('pointerup', handlePointerUp);
   window.addEventListener('mouseup', handlePointerUp);
-
-
-
   window.addEventListener('touchend', handlePointerUp);
+  window.addEventListener('touchcancel', handlePointerUp);
 
 
 
@@ -34895,11 +34461,12 @@ function startDragMove(clientX, clientY) {
 
 
 
-function selectWidget(key) {
-
-
-
+function selectWidget(key, preserveTextSelection = false) {
   state.selectedWidget = key;
+  if (!preserveTextSelection) {
+    state.selectedTextKey = null;
+    state.selectedTextKeys = [];
+  }
 
 
 
@@ -35203,259 +34770,177 @@ function selectWidget(key) {
 
 
 
-function updateGizmoBox() {
-
-
-
-  if (!gizmoBox) return;
-
-
-
-
-
-
-
-  if (!state.isInteractiveLayout || !state.selectedWidget) {
-
-
-
-    gizmoBox.style.display = 'none';
-
-
-
-    return;
-
-
-
-  }
-
-
-
-
-
-
-
-  const b = renderer.widgetBounds[state.selectedWidget];
-
-
-
-  if (!b) {
-
-
-
-    gizmoBox.style.display = 'none';
-
-
-
-    return;
-
-
-
-  }
-
-
-
-
-
-
-
-  const isPhoto = state.selectedWidget === '__bg_photo__';
-
-
-
-  const isBgBorder = state.selectedWidget && state.selectedWidget.endsWith('_bg');
-
-
-
-  const gizmoSubPartSelect = document.getElementById('gizmoSubPartSelect');
-
-
-
-  if (gizmoSubPartSelect) {
-
-
-
-    gizmoSubPartSelect.style.display = isPhoto ? 'none' : '';
-
-
-
-    gizmoSubPartSelect.value = isBgBorder ? 'border' : 'widget';
-
-
-
-  }
-
-
-
-  if (isBgBorder) {
-
-
-
-    gizmoBox.classList.add('mode-bg-border');
-
-
-
-  } else {
-
-
-
-    gizmoBox.classList.remove('mode-bg-border');
-
-
-
-  }
-
-
-
-
-
-
-
-  const canvasRect = canvas.getBoundingClientRect();
-
-
-
-  const wrapperRect = canvasWrapper.getBoundingClientRect();
-
-
-
-  const scale = canvasRect.width / canvas.width;
-
-
-
-
-
-
-
-  const offsetX = canvasRect.left - wrapperRect.left;
-
-
-
-  const offsetY = canvasRect.top - wrapperRect.top;
-
-
-
-
-
-
-
-  const cssLeft = offsetX + b.x * scale;
-
-
-
-  const cssTop = offsetY + b.y * scale;
-
-
-
-  const cssWidth = b.width * scale;
-
-
-
-  const cssHeight = b.height * scale;
-
-
-
-
-
-
-
-  gizmoBox.style.display = 'block';
-
-
-
-  gizmoBox.style.left = `${cssLeft}px`;
-
-
-
-  gizmoBox.style.top = `${cssTop}px`;
-
-
-
-  gizmoBox.style.width = `${cssWidth}px`;
-
-
-
-  gizmoBox.style.height = `${cssHeight}px`;
-
-
-
-
-
-
-
-  const rot = (typeof b.rotation === 'number') ? b.rotation : 0;
-
-
-
-  gizmoBox.style.transform = `rotate(${rot}deg)`;
-
-
-
-  gizmoBox.style.transformOrigin = 'center center';
-
-
-
-
-
-
-
-  if (gizmoTitle) {
-
-
-
-    if (isPhoto) {
-
-
-
-      gizmoTitle.textContent = `🖼️ Photo (${b.width}×${b.height}) - Pan: ${state.config.photoPanX || 0}%, ${state.config.photoPanY || 0}%`;
-
-
-
-    } else {
-
-
-
-      const rotSuffix = rot !== 0 ? ` [${rot}°]` : '';
-
-
-
-      gizmoTitle.textContent = `${b.name} (${b.width}×${b.height})${rotSuffix}`;
-
-
-
+function populateGizmoSubPartDropdown(widgetKey, activePart) {
+  const sel = document.getElementById('gizmoSubPartSelect');
+  if (!sel) return;
+  sel.innerHTML = '';
+
+  const baseKey = (widgetKey || '').replace(/_bg$/, '');
+
+  const optWidget = new Option('📦 Whole Widget', 'widget');
+  sel.add(optWidget);
+
+  const optBorder = new Option('🔲 Card / Border', 'border');
+  sel.add(optBorder);
+
+  if (renderer && renderer.textBounds) {
+    for (const [k, tb] of Object.entries(renderer.textBounds)) {
+      if (tb.widgetKey === baseKey) {
+        const optText = new Option(`✏️ ${tb.label || tb.partKey}`, tb.partKey);
+        sel.add(optText);
+      }
     }
-
-
-
   }
 
-
-
-
-
-
-
-  if (gizmoDeleteBtn) {
-
-
-
-    gizmoDeleteBtn.style.display = 'inline-flex';
-
-
-
-  }
-
-
-
+  sel.value = activePart || (widgetKey && widgetKey.endsWith('_bg') ? 'border' : 'widget');
 }
 
+function updateGizmoBox() {
+  if (!gizmoBox) return;
 
+  if (!state.isInteractiveLayout) {
+    gizmoBox.style.display = 'none';
+    return;
+  }
 
+  // 1. Text Selection Mode in Single Activity
+  if (!state.isWeeklyMode && state.selectedTextKey && renderer && renderer.textBounds && renderer.textBounds[state.selectedTextKey]) {
+    const tb = renderer.textBounds[state.selectedTextKey];
+    const canvasRect = canvas.getBoundingClientRect();
+    const wrapperRect = canvasWrapper.getBoundingClientRect();
+    const scale = canvasRect.width / canvas.width;
+    const offsetX = canvasRect.left - wrapperRect.left;
+    const offsetY = canvasRect.top - wrapperRect.top;
+
+    const pad = 4;
+    const cssLeft = offsetX + (tb.x - pad) * scale;
+    const cssTop = offsetY + (tb.y - pad) * scale;
+    const cssWidth = Math.max(28, (tb.w + pad * 2) * scale);
+    const cssHeight = Math.max(20, (tb.h + pad * 2) * scale);
+
+    gizmoBox.style.display = 'block';
+    gizmoBox.style.left = `${cssLeft}px`;
+    gizmoBox.style.top = `${cssTop}px`;
+    gizmoBox.style.width = `${cssWidth}px`;
+    gizmoBox.style.height = `${cssHeight}px`;
+
+    const rot = (tb.options && typeof tb.options.rotation === 'number') ? tb.options.rotation : 0;
+    gizmoBox.style.transform = `rotate(${rot}deg)`;
+    gizmoBox.style.transformOrigin = 'center center';
+
+    gizmoBox.classList.add('mode-text');
+    gizmoBox.classList.remove('mode-bg-border');
+
+    const gizmoTitle = document.getElementById('gizmoTitle');
+    if (gizmoTitle) {
+      const displayLabel = tb.label || tb.partKey || 'Text';
+      gizmoTitle.textContent = `✏️ ${displayLabel}`;
+    }
+
+    const gizmoSubPartSelect = document.getElementById('gizmoSubPartSelect');
+    if (gizmoSubPartSelect) {
+      gizmoSubPartSelect.style.display = '';
+      populateGizmoSubPartDropdown(tb.widgetKey, tb.partKey);
+    }
+    return;
+  }
+
+  // 2. Widget Selection Mode
+  if (!state.selectedWidget) {
+    gizmoBox.style.display = 'none';
+    return;
+  }
+
+  const b = renderer.widgetBounds[state.selectedWidget];
+  if (!b) {
+    gizmoBox.style.display = 'none';
+    return;
+  }
+
+  const isPhoto = state.selectedWidget === '__bg_photo__';
+  const isBgBorder = state.selectedWidget && state.selectedWidget.endsWith('_bg');
+
+  gizmoBox.classList.remove('mode-text');
+  if (isBgBorder) {
+    gizmoBox.classList.add('mode-bg-border');
+  } else {
+    gizmoBox.classList.remove('mode-bg-border');
+  }
+
+  const canvasRect = canvas.getBoundingClientRect();
+  const wrapperRect = canvasWrapper.getBoundingClientRect();
+  const scale = canvasRect.width / canvas.width;
+  const offsetX = canvasRect.left - wrapperRect.left;
+  const offsetY = canvasRect.top - wrapperRect.top;
+
+  const cssLeft = offsetX + b.x * scale;
+  const cssTop = offsetY + b.y * scale;
+  const cssWidth = b.width * scale;
+  const cssHeight = b.height * scale;
+
+  gizmoBox.style.display = 'block';
+  gizmoBox.style.left = `${cssLeft}px`;
+  gizmoBox.style.top = `${cssTop}px`;
+  gizmoBox.style.width = `${cssWidth}px`;
+  gizmoBox.style.height = `${cssHeight}px`;
+
+  const rot = (typeof b.rotation === 'number') ? b.rotation : 0;
+  gizmoBox.style.transform = `rotate(${rot}deg)`;
+  gizmoBox.style.transformOrigin = 'center center';
+
+  const gizmoTitle = document.getElementById('gizmoTitle');
+  if (gizmoTitle) {
+    if (isPhoto) {
+      gizmoTitle.textContent = `🖼️ Photo (${b.width}×${b.height}) - Pan: ${state.config.photoPanX || 0}%, ${state.config.photoPanY || 0}%`;
+    } else {
+      const rotSuffix = rot !== 0 ? ` [${rot}°]` : '';
+      gizmoTitle.textContent = `${b.name || state.selectedWidget} (${b.width}×${b.height})${rotSuffix}`;
+    }
+  }
+
+  const gizmoSubPartSelect = document.getElementById('gizmoSubPartSelect');
+  if (gizmoSubPartSelect) {
+    gizmoSubPartSelect.style.display = isPhoto ? 'none' : '';
+    populateGizmoSubPartDropdown(state.selectedWidget, isBgBorder ? 'border' : 'widget');
+  }
+
+  const gizmoDeleteBtn = document.getElementById('gizmoDeleteBtn');
+  if (gizmoDeleteBtn) {
+    gizmoDeleteBtn.style.display = 'inline-flex';
+  }
+}
+window.populateGizmoSubPartDropdown = populateGizmoSubPartDropdown;
 window.selectWidget = selectWidget;
 
 
 
 window.updateGizmoBox = updateGizmoBox;
+
+  // Gizmo SubPart Dropdown Selection Listener
+  const gSubSelect = document.getElementById('gizmoSubPartSelect');
+  if (gSubSelect) {
+    gSubSelect.addEventListener('change', () => {
+      const val = gSubSelect.value;
+      const baseKey = (state.selectedWidget || '').replace(/_bg$/, '');
+      if (!baseKey) return;
+      if (!val || val === 'widget') {
+        state.selectedTextKey = null;
+        state.selectedTextKeys = [];
+        state.selectedSubPartKey = null;
+        selectWidget(baseKey);
+      } else if (val === 'border') {
+        state.selectedTextKey = null;
+        state.selectedTextKeys = [];
+        state.selectedSubPartKey = 'border';
+        selectWidget(baseKey + '_bg');
+      } else {
+        // Individual text part in widget
+        const fullKey = `${baseKey}__${val}`;
+        selectSingleText(fullKey);
+      }
+    });
+  }
+
 
 
 
