@@ -4027,6 +4027,55 @@ function init() {
 
   setupKeyboardShortcuts();
 
+  // Wire Stage Toolbar Transparent Background button
+  const stageTransparentBgBtn = document.getElementById('stageTransparentBgBtn');
+  if (stageTransparentBgBtn) {
+    stageTransparentBgBtn.addEventListener('click', () => {
+      const isCurrentlyTransparent = state.config.bgType === 'transparent' || 
+                                     (state.isWeeklyMode && state.weeklyData?.bgType === 'transparent');
+      const newType = isCurrentlyTransparent ? 'solid' : 'transparent';
+      setCanvasBackgroundType(newType);
+    });
+  }
+
+  // Wire Weekly Background Type Grid
+  if (typeof setupCardGrid === 'function') {
+    setupCardGrid('#weeklyBgTypeGrid', 'data-weekly-bg', (bg) => {
+      setCanvasBackgroundType(bg);
+    });
+  }
+
+  // Wire Weekly Make Cards Transparent / Restore Card Backgrounds buttons
+  const weeklyMakeCardsTransparentBtn = document.getElementById('weeklyMakeCardsTransparentBtn');
+  if (weeklyMakeCardsTransparentBtn) {
+    weeklyMakeCardsTransparentBtn.addEventListener('click', () => {
+      setWeeklyCardsTransparent(true);
+    });
+  }
+
+  const weeklyRestoreCardsBgBtn = document.getElementById('weeklyRestoreCardsBgBtn');
+  if (weeklyRestoreCardsBgBtn) {
+    weeklyRestoreCardsBgBtn.addEventListener('click', () => {
+      setWeeklyCardsTransparent(false);
+    });
+  }
+
+  // Wire Weekly Solid Background Color picker
+  const weeklySolidBgColor = document.getElementById('weeklySolidBgColor');
+  const weeklySolidBgColorVal = document.getElementById('weeklySolidBgColorVal');
+  if (weeklySolidBgColor) {
+    weeklySolidBgColor.addEventListener('input', (e) => {
+      state.config.solidBgColor = e.target.value;
+      if (weeklySolidBgColorVal) weeklySolidBgColorVal.textContent = e.target.value;
+      triggerRender();
+    });
+    weeklySolidBgColor.addEventListener('change', () => {
+      pushWeeklyUndoSnapshot();
+      autoSaveWeeklyDraft();
+    });
+  }
+
+
 
 
   setupWeeklyControls();
@@ -4074,6 +4123,9 @@ function init() {
 
 
   window.syncAllControlsWithConfig = syncAllControlsWithConfig;
+  window.updateTransparencyUI = updateTransparencyUI;
+  window.setCanvasBackgroundType = setCanvasBackgroundType;
+  window.setWeeklyCardsTransparent = setWeeklyCardsTransparent;
 
 
 
@@ -4106,6 +4158,8 @@ function triggerRender(progActivity = null) {
 
 
     if (gizmoBox) gizmoBox.style.display = 'none';
+
+    if (typeof updateTransparencyUI === 'function') updateTransparencyUI();
 
 
 
@@ -4143,6 +4197,137 @@ function triggerRender(progActivity = null) {
 
 
 
+
+
+
+// ==========================================
+// BACKGROUND TRANSPARENCY & THEME HELPERS
+// ==========================================
+
+function updateTransparencyUI() {
+  const isTransparent = state.config.bgType === 'transparent' || 
+                        (state.isWeeklyMode && state.weeklyData && state.weeklyData.bgType === 'transparent');
+  const currentBg = (state.isWeeklyMode && state.weeklyData && state.weeklyData.bgType) 
+                    ? state.weeklyData.bgType 
+                    : (state.config.bgType || 'solid');
+
+  // 1. Canvas wrapper checkerboard class
+  const canvasWrapper = document.getElementById('canvasWrapper') || document.querySelector('.canvas-wrapper');
+  if (canvasWrapper) {
+    if (isTransparent) {
+      canvasWrapper.classList.add('is-transparent-bg');
+    } else {
+      canvasWrapper.classList.remove('is-transparent-bg');
+    }
+  }
+
+  // 2. Stage Toolbar Transparent BG button
+  const stageStatus = document.getElementById('stageTransparentBgStatus');
+  const stageBtn = document.getElementById('stageTransparentBgBtn');
+  if (stageStatus) {
+    stageStatus.textContent = isTransparent ? 'ON' : 'OFF';
+    stageStatus.style.color = isTransparent ? '#00f0ff' : '';
+  }
+  if (stageBtn) {
+    stageBtn.classList.toggle('active', isTransparent);
+    stageBtn.style.borderColor = isTransparent ? 'rgba(0, 240, 255, 0.6)' : '';
+  }
+
+  // 3. Weekly Recap Tab controls
+  const weeklyBgBadge = document.getElementById('weeklyBgBadge');
+  if (weeklyBgBadge) {
+    if (currentBg === 'transparent') {
+      weeklyBgBadge.textContent = 'Transparent (Sticker)';
+      weeklyBgBadge.style.color = '#00f0ff';
+    } else if (currentBg === 'gradient') {
+      weeklyBgBadge.textContent = 'Gradient';
+      weeklyBgBadge.style.color = '#a855f7';
+    } else if (currentBg === 'photo') {
+      weeklyBgBadge.textContent = 'Photo';
+      weeklyBgBadge.style.color = '#38bdf8';
+    } else {
+      weeklyBgBadge.textContent = 'Solid Dark';
+      weeklyBgBadge.style.color = '#00f0ff';
+    }
+  }
+
+  const weeklyNotice = document.getElementById('weeklyTransparentNotice');
+  if (weeklyNotice) {
+    weeklyNotice.style.display = isTransparent ? 'block' : 'none';
+  }
+
+  const weeklySolidControls = document.getElementById('weeklySolidBgControls');
+  if (weeklySolidControls) {
+    weeklySolidControls.style.display = currentBg === 'solid' ? 'flex' : 'none';
+  }
+
+  const weeklyBgCards = document.querySelectorAll('#weeklyBgTypeGrid .choice-card');
+  weeklyBgCards.forEach(card => {
+    if (card.getAttribute('data-weekly-bg') === currentBg) {
+      card.classList.add('active');
+    } else {
+      card.classList.remove('active');
+    }
+  });
+
+  const singleBgCards = document.querySelectorAll('#bgTypeGrid .choice-card');
+  singleBgCards.forEach(card => {
+    if (card.getAttribute('data-bg') === state.config.bgType) {
+      card.classList.add('active');
+    } else {
+      card.classList.remove('active');
+    }
+  });
+
+  const weeklySolidBgColor = document.getElementById('weeklySolidBgColor');
+  const weeklySolidBgColorVal = document.getElementById('weeklySolidBgColorVal');
+  if (weeklySolidBgColor && state.config.solidBgColor) {
+    weeklySolidBgColor.value = state.config.solidBgColor;
+  }
+  if (weeklySolidBgColorVal && state.config.solidBgColor) {
+    weeklySolidBgColorVal.textContent = state.config.solidBgColor;
+  }
+}
+
+function setCanvasBackgroundType(bgType) {
+  if (!state.config) return;
+  if (state.isWeeklyMode) {
+    if (typeof window.pushWeeklyUndoSnapshot === 'function') {
+      window.pushWeeklyUndoSnapshot();
+    }
+  } else {
+    if (typeof pushUndoSnapshot === 'function') {
+      pushUndoSnapshot();
+    }
+  }
+  state.config.bgType = bgType;
+  if (state.weeklyData) {
+    state.weeklyData.bgType = bgType;
+  }
+  updateTransparencyUI();
+  triggerRender();
+  if (state.isWeeklyMode && typeof autoSaveWeeklyDraft === 'function') {
+    autoSaveWeeklyDraft();
+  }
+}
+
+function setWeeklyCardsTransparent(transparent) {
+  if (!state.weeklyData) return;
+  if (typeof window.pushWeeklyUndoSnapshot === 'function') {
+    window.pushWeeklyUndoSnapshot();
+  }
+  state.weeklyData.cardStyles = state.weeklyData.cardStyles || {};
+  state.weeklyData.cardStyles.allCards = state.weeklyData.cardStyles.allCards || {};
+  state.weeklyData.cardStyles.allCards.showBg = !transparent;
+  triggerRender();
+  if (typeof autoSaveWeeklyDraft === 'function') {
+    autoSaveWeeklyDraft();
+  }
+}
+
+window.updateTransparencyUI = updateTransparencyUI;
+window.setCanvasBackgroundType = setCanvasBackgroundType;
+window.setWeeklyCardsTransparent = setWeeklyCardsTransparent;
 
 
 function updateAnimTimelineMarkers(progressFraction = 1.0) {
@@ -11575,6 +11760,8 @@ const resetCurrentTextBtn = document.getElementById('weeklyResetCurrentTextBtn')
 
 
 
+      bgType: (state.weeklyData && state.weeklyData.bgType) || state.config.bgType || 'solid',
+      solidBgColor: state.config.solidBgColor || '#0a0a0d',
       template: state.weeklyData.template || 'cards-grid',
 
 
@@ -11700,6 +11887,13 @@ const resetCurrentTextBtn = document.getElementById('weeklyResetCurrentTextBtn')
 
 
 
+    if (preset.bgType) {
+      state.config.bgType = preset.bgType;
+      state.weeklyData.bgType = preset.bgType;
+    }
+    if (preset.solidBgColor) {
+      state.config.solidBgColor = preset.solidBgColor;
+    }
     if (preset.template) {
 
 

@@ -791,7 +791,7 @@ export class OverlayRenderer {
     const accentColor = config.customAccentColor || theme.accent;
 
     // 1. Draw Background
-    this.drawBackground(ctx, baseW, baseH, config);
+    this.drawBackground(ctx, baseW, baseH, config, activity);
 
     if (!activity) {
       this.drawPlaceholder(ctx, baseW, baseH);
@@ -851,15 +851,21 @@ export class OverlayRenderer {
     ctx.restore();
   }
 
-  drawBackground(ctx, w, h, config) {
+  drawBackground(ctx, w, h, config, activity = null) {
     ctx.clearRect(0, 0, w, h);
 
-    if (config.bgType === 'transparent') {
+    const isTransparent = config.bgType === 'transparent' || 
+                          config.isTransparentBg || 
+                          (activity && (activity.bgType === 'transparent' || activity.isTransparentBg));
+
+    if (isTransparent) {
       delete this.widgetBounds['__bg_photo__'];
       return;
     }
 
-    if (config.bgType === 'photo' && this.bgImage) {
+    const effectiveBgType = (activity && activity.bgType) ? activity.bgType : config.bgType;
+
+    if (effectiveBgType === 'photo' && this.bgImage) {
       const img = this.bgImage;
       const imgAspect = img.width / img.height;
       const canvasAspect = w / h;
@@ -967,7 +973,7 @@ export class OverlayRenderer {
 
     delete this.widgetBounds['__bg_photo__'];
 
-    if (config.bgType === 'gradient') {
+    if (effectiveBgType === 'gradient') {
       const gradPreset = config.gradientPreset || 'sunset';
       const grad = ctx.createLinearGradient(0, 0, w, h);
 
@@ -994,7 +1000,7 @@ export class OverlayRenderer {
     }
 
     // Default Solid
-    const solidColor = config.solidBgColor || '#0a0a0c';
+    const solidColor = (activity && activity.solidBgColor) || config.solidBgColor || '#0a0a0c';
     ctx.fillStyle = solidColor;
     ctx.fillRect(0, 0, w, h);
   }

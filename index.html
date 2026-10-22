@@ -356,6 +356,12 @@
 
         </button>
 
+        <button type="button" id="stageTransparentBgBtn" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" title="Toggle Transparent Canvas Background (PNG Sticker / Video Overlay mode)">
+
+          🏁 Transparent BG: <span id="stageTransparentBgStatus" style="font-weight: 700;">OFF</span>
+
+        </button>
+
         <button id="stageSaveTemplateBtn" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; color: #38bdf8;" title="Save current layout as a custom template">
 
           💾 Save Template
@@ -638,6 +644,60 @@
 
             </select>
 
+          </div>
+
+          <!-- WEEKLY CANVAS BACKGROUND & TRANSPARENCY -->
+          <div class="section" id="weeklyBackgroundSection">
+            <div class="section-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span>Canvas Background &amp; Transparency</span>
+              <span id="weeklyBgBadge" style="font-size: 0.72rem; color: var(--accent-volt); font-weight: 600;">Solid Dark</span>
+            </div>
+
+            <div class="grid-4" id="weeklyBgTypeGrid">
+              <div class="choice-card active" data-weekly-bg="solid" title="Solid Dark background">
+                <div class="choice-card-icon">⬛</div>
+                <div class="choice-card-label">Solid</div>
+              </div>
+              <div class="choice-card" data-weekly-bg="transparent" title="Transparent background for stickers &amp; video overlays">
+                <div class="choice-card-icon">🏁</div>
+                <div class="choice-card-label">Transparent</div>
+              </div>
+              <div class="choice-card" data-weekly-bg="gradient" title="Vibrant gradient background">
+                <div class="choice-card-icon">🌈</div>
+                <div class="choice-card-label">Gradient</div>
+              </div>
+              <div class="choice-card" data-weekly-bg="photo" title="Photo background">
+                <div class="choice-card-icon">🖼️</div>
+                <div class="choice-card-label">Photo</div>
+              </div>
+            </div>
+
+            <!-- Transparency notice & Card transparency quick controls -->
+            <div id="weeklyTransparentNotice" style="display: none; margin-top: 8px; padding: 10px 12px; border-radius: var(--radius-sm); background: rgba(0, 240, 255, 0.08); border: 1px solid rgba(0, 240, 255, 0.25); font-size: 0.75rem;">
+              <div style="display: flex; align-items: center; gap: 6px; font-weight: 600; color: #00f0ff; margin-bottom: 4px;">
+                <span>✨ Transparent PNG Sticker Mode Active</span>
+              </div>
+              <p style="margin: 0 0 8px 0; color: var(--text-muted); font-size: 0.72rem; line-height: 1.35;">
+                Canvas background is 100% transparent upon export. Layer directly over video reels, Instagram Stories, or running photos.
+              </p>
+              <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                <button type="button" id="weeklyMakeCardsTransparentBtn" class="btn btn-secondary" style="font-size: 0.72rem; padding: 4px 10px;">
+                  🔲 Make Cards Transparent Too
+                </button>
+                <button type="button" id="weeklyRestoreCardsBgBtn" class="btn btn-secondary" style="font-size: 0.72rem; padding: 4px 10px;">
+                  📦 Restore Card Backgrounds
+                </button>
+              </div>
+            </div>
+
+            <!-- Solid Color Picker (Shown when Solid is selected) -->
+            <div id="weeklySolidBgControls" style="margin-top: 8px; display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 0.75rem; color: var(--text-muted);">Solid Canvas Color</span>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <input type="color" id="weeklySolidBgColor" value="#0a0a0d" style="width: 34px; height: 26px; border: none; border-radius: 4px; background: none; cursor: pointer;">
+                <span id="weeklySolidBgColorVal" style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted);">#0a0a0d</span>
+              </div>
+            </div>
           </div>
 
 

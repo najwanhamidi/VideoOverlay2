@@ -212,6 +212,18 @@ body {
   transition: width 0.1s ease, height 0.1s ease;
 }
 
+/* Transparent checkerboard background indicator for stage preview */
+.canvas-wrapper.is-transparent-bg {
+  background-color: #0b0d13;
+  background-image: 
+    linear-gradient(45deg, #181b24 25%, transparent 25%),
+    linear-gradient(-45deg, #181b24 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #181b24 75%),
+    linear-gradient(-45deg, transparent 75%, #181b24 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+}
+
 /* FIT MODE (default responsive container fitting) */
 .stage-viewport.mode-fit .canvas-wrapper {
   max-width: 100%;
