@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<title>Lari Studio — Running Overlays</title>
+<meta name="description" content="Make customizable running overlays and animated videos from your .fit, .tcx and .gpx files.">
+<meta name="theme-color" content="#0d0f14">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="fonts/fonts.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body data-mode="single">
+<header class="top">
+  <div class="brand"><svg viewBox="0 0 32 32" class="logo"><rect width="32" height="32" rx="9" fill="#c6ff3d"/><path d="M8 22l5-12 4 8 3-5 4 9" fill="none" stroke="#0d0f14" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><b>Lari</b><span>Studio</span></div>
+  <nav id="mode-tabs" class="mode-tabs">
+    <button data-mode="single" class="on">Activity</button>
+    <button data-mode="multi">Multi-run</button>
+  </nav>
+  <div class="spacer"></div>
+  <div class="tb">
+    <button id="undo" class="ibtn" title="Undo (Ctrl+Z)"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
+    <button id="redo" class="ibtn" title="Redo (Ctrl+Shift+Z)"><svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg></button>
+  </div>
+  <div class="tb zoom">
+    <button id="zoom-out" class="ibtn" title="Zoom out"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+    <button id="zoom-label" class="zl" title="Fit to screen">100%</button>
+    <button id="zoom-in" class="ibtn" title="Zoom in"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+  </div>
+  <button id="btn-video" class="btn hide-sm" title="Export animated video"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg>Video</button>
+  <button id="btn-export" class="btn primary" title="Export image (Ctrl+E)"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span>Export</span></button>
+  <button id="btn-menu" class="ibtn" title="Menu"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></button>
+</header>
+<main class="app">
+  <aside id="side" class="side sheet">
+    <button class="sheet-close" aria-label="Close">✕</button>
+    <nav id="side-tabs" class="side-tabs">
+      <button data-tab="data" class="on">Data</button>
+      <button data-tab="templates">Templates</button>
+      <button data-tab="add">Add</button>
+      <button data-tab="layers">Layers</button>
+      <button data-tab="trash">Trash</button>
+    </nav>
+    <div id="side-body" class="side-body"></div>
+  </aside>
+  <section class="center">
+    <div id="stage-scroll" class="stage-scroll">
+      <div id="stage-pad" class="stage-pad">
+        <div id="stage" class="stage"><canvas id="view"></canvas><div id="overlay" class="overlay"></div></div>
+      </div>
+    </div>
+    <div id="seltools" class="seltools hidden">
+      <button data-act="edit" class="only-sm" title="Edit">Edit</button>
+      <button data-act="dup" title="Duplicate (Ctrl+D)"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button>
+      <button data-act="up" title="Bring forward"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
+      <button data-act="down" title="Send backward"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg></button>
+      <button data-act="group" title="Group (Ctrl+G)">Group</button>
+      <button data-act="ungroup" title="Ungroup">Ungroup</button>
+      <button data-act="lock" title="Lock / unlock"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></button>
+      <button data-act="del" class="danger" title="Delete (Del)"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
+    </div>
+    <div class="timeline">
+      <button id="tl-play" class="ibtn play" title="Play animation preview (Space)"></button>
+      <input id="tl-scrub" type="range" min="0" max="10" step="0.01" value="10">
+      <span id="tl-time" class="tl-time"></span>
+      <button id="tl-static" class="btn small" title="Show the final still frame">Still</button>
+    </div>
+  </section>
+  <aside id="right" class="right sheet">
+    <button class="sheet-close" aria-label="Close">✕</button>
+    <div id="props" class="props"></div>
+  </aside>
+</main>
+<nav id="mnav" class="mnav">
+  <button data-sheet="side" data-tab="data"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 8l5-5 5 5M5 21h14"/></svg>Data</button>
+  <button data-sheet="side" data-tab="templates"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Templates</button>
+  <button data-sheet="side" data-tab="add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add</button>
+  <button data-sheet="side" data-tab="layers"><svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg>Layers</button>
+  <button data-sheet="props"><svg viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Edit</button>
+  <button data-sheet="export"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Export</button>
+</nav>
+<script src="js/neutralino.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

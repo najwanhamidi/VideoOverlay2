@@ -1,0 +1,12 @@
+{
+  "name": "lari-studio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Customizable running overlays and animated videos from .fit/.tcx/.gpx files.",
+  "scripts": {
+    "start": "npx --yes http-server app -p 8080 -c-1",
+    "sw": "node tools/build-sw.mjs",
+    "desktop": "npx --yes @neutralinojs/neu update && npx --yes @neutralinojs/neu build --release --embed-resources",
+    "desktop:run": "npx --yes @neutralinojs/neu run"
+  }
+}

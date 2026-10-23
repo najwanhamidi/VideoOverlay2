@@ -1,0 +1,7 @@
+bin/
+dist/
+node_modules/
+.tmp/
+Desktop App/
+*.log
+.DS_Store
