@@ -1,0 +1,32 @@
+{
+  "$schema": "https://raw.githubusercontent.com/neutralinojs/neutralinojs/main/schemas/neutralino.config.schema.json",
+  "applicationId": "studio.lari.overlay",
+  "version": "1.0.0",
+  "defaultMode": "window",
+  "port": 0,
+  "documentRoot": "/app/",
+  "url": "/",
+  "enableServer": true,
+  "enableNativeAPI": true,
+  "tokenSecurity": "one-time",
+  "logging": { "enabled": false, "writeToLogFile": false },
+  "nativeAllowList": ["app.*", "os.*", "filesystem.*", "window.*", "events.*"],
+  "modes": {
+    "window": {
+      "title": "Lari Studio — Running Overlays",
+      "width": 1440, "height": 900, "minWidth": 900, "minHeight": 600,
+      "center": true, "maximize": true, "resizable": true,
+      "icon": "/app/icons/icon-512.png",
+      "enableInspector": false,
+      "exitProcessOnClose": true
+    }
+  },
+  "cli": {
+    "binaryName": "LariStudio",
+    "resourcesPath": "/app/",
+    "extensionsPath": "/extensions/",
+    "clientLibrary": "/app/js/neutralino.js",
+    "binaryVersion": "6.3.0",
+    "clientVersion": "6.3.0"
+  }
+}
