@@ -124,7 +124,7 @@ export function statBlock(ctx, parts, o, env) {
       const ghost = String(applyTransform(parts.value, vts)).replace(/[0-9]/g, '8');
       const rows = [];
       if (rowL) rows.push(rowL);
-      rows.push({ w: VR.w, h: VR.h, put: (x, y) => { ops.push({ k: 't', s: ghost, x, y: y + VR.asc, ts: { ...vts, opacity: 0.12, shadow: false, stroke: 0 } }); putVR(x, y); } });
+      rows.push({ w: VR.w, h: VR.h, put: (x, y) => { ops.push({ k: 't', s: ghost, x, y: y + VR.asc, ts: { ...vts, opacity: 0.12, shadow: false, stroke: 0, __raw: true } }); putVR(x, y); } });
       const r = stack(rows); w = r.w; h = r.h; break;
     }
     case 'vlabel': {

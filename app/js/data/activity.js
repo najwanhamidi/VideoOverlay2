@@ -137,13 +137,13 @@ export function buildActivity(raw, opts = {}) {
   act.avgPace = act.distance > 0 ? act.moving / (act.distance / 1000) : NaN;
   act.avgSpeed = act.moving > 0 ? act.distance / act.moving : NaN;
   act.maxSpeed = maxOf(smoothSpeed(act, 10).filter(isNum));
-  act.steps = isNum(act.avgCad) ? Math.round(act.avgCad * act.moving / 60) : NaN;
+  act.steps = isNum(act.avgCad) ? Math.floor(act.avgCad * act.moving / 60) : NaN;
   return act;
 }
 export function maxOf(a) { let m = -Infinity; for (const v of a) if (v > m) m = v; return m === -Infinity ? NaN : m; }
 export function minOf(a) { let m = Infinity; for (const v of a) if (v < m) m = v; return m === Infinity ? NaN : m; }
 function avg(a) { return a.length ? a.reduce((s, v) => s + v, 0) / a.length : NaN; }
-function estimateCalories(dist) { return Math.round((dist / 1000) * 65); }
+function estimateCalories(dist) { return Math.floor((dist / 1000) * 65); }
 
 function smoothArr(arr, t, win) {
   const n = arr.length, out = new Float64Array(n).fill(NaN);

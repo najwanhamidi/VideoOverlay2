@@ -226,3 +226,36 @@ export function renderScene(ctx, doc, env, opts = {}) {
     drawElement(ctx, el, env);
   }
 }
+
+// ---------- Text hit regions (for editing individual text inside a widget) ----------
+let hitCtx = null;
+// Returns every text drawn by the element: {p (text style path), orig, shown, key, m (local→doc matrix), x, y, w, h, n (index among same style)}
+export function textHits(el, env) {
+  if (!REG[el.type] || el.hidden) return [];
+  if (!hitCtx) { const c = document.createElement('canvas'); c.width = c.height = 2; hitCtx = c.getContext('2d'); }
+  const tagged = [];
+  forEachTS(el, (ts, p) => { ts.__p = p; tagged.push(ts); });
+  const e = { ...env, hits: [] };
+  hitCtx.save(); hitCtx.setTransform(1, 0, 0, 1, 0, 0);
+  try { drawElement(hitCtx, el, e); } finally { hitCtx.restore(); tagged.forEach((ts) => delete ts.__p); }
+  const count = {};
+  for (const h of e.hits) count[h.p] = (count[h.p] || 0) + 1;
+  const seen = {};
+  for (const h of e.hits) {
+    const ts = pathGet(el, h.p);
+    h.n = seen[h.p] = (seen[h.p] ?? -1) + 1;
+    h.single = count[h.p] === 1;
+    h.key = ts && ts.txt && '*' in ts.txt ? '*' : h.single ? '*' : '=' + h.orig;
+  }
+  return e.hits;
+}
+function pathGet(o, p) { for (const k of p.split('.')) { if (o == null) return undefined; o = o[k]; } return o; }
+// Doc-space point inside a hit?
+export function hitContains(h, x, y, tol = 0) {
+  const q = h.m.inverse().transformPoint(new DOMPoint(x, y));
+  const sx = Math.hypot(h.m.a, h.m.b) || 1, t = tol / sx;
+  return q.x >= h.x - t && q.x <= h.x + h.w + t && q.y >= h.y - t && q.y <= h.y + h.h + t;
+}
+export function hitCorners(h) {
+  return [[h.x, h.y], [h.x + h.w, h.y], [h.x + h.w, h.y + h.h], [h.x, h.y + h.h]].map(([x, y]) => h.m.transformPoint(new DOMPoint(x, y)));
+}

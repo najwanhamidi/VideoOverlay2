@@ -1,5 +1,5 @@
 // Central application state, documents, history, environment.
-import { clone, uid } from '../util.js';
+import { clone, uid, getPath } from '../util.js';
 import { REG, layoutElement, makeElement } from '../widgets/core.js';
 import { stateAt, buildActivity, sampleRaw } from '../data/activity.js';
 import { multiStats, multiStateAt } from '../data/multi.js';
@@ -39,7 +39,7 @@ export const App = {
   hist: { single: { stack: [], idx: -1 }, multi: { stack: [], idx: -1 } },
   act: null, acts: [], sample: null, sampleActs: null,
   settings: { units: 'metric', maxHr: 0, zonePct: [50, 60, 70, 80, 90], h24: true, weekStart: 1, rangeFromRuns: false },
-  sel: [], assets: {}, assetSrc: {},
+  sel: [], tsel: null, tselScope: 'one', assets: {}, assetSrc: {},
   time: null, playing: false,
   measureCtx: document.createElement('canvas').getContext('2d'),
   get doc() { return this.docs[this.mode]; },
@@ -104,7 +104,37 @@ export function layoutAll(doc = App.doc) {
 // ---------- Elements ----------
 export function byId(id, doc = App.doc) { return doc.elements.find((e) => e.id === id); }
 export function selected() { return App.sel.map((id) => byId(id)).filter(Boolean); }
-export function setSel(ids, silent) { App.sel = [...new Set(ids)].filter((id) => byId(id)); if (!silent) emit('sel'); }
+export function setSel(ids, silent) {
+  App.sel = [...new Set(ids)].filter((id) => byId(id));
+  if (App.tsel && !(App.sel.length === 1 && App.sel[0] === App.tsel.id)) App.tsel = null;
+  if (!silent) emit('sel');
+}
+// ---------- Individual text inside a widget ----------
+// App.tsel = { id, p (text style path), key ('*' or '=<original>'), n, orig, shown, single }
+export function setTextSel(t) { App.tsel = t; emit('sel'); }
+export function tselElement() { return App.tsel ? byId(App.tsel.id) : null; }
+export function tselStyle() { const e = tselElement(); return e ? getPath(e, App.tsel.p) : null; }
+export function currentText(e = tselElement(), t = App.tsel) {
+  if (!e || !t) return '';
+  if (e.type === 'text') return e.props.text;
+  const ts = getPath(e, t.p);
+  return ts && ts.txt && t.key in ts.txt ? ts.txt[t.key] : t.orig;
+}
+export function setTextOverride(value, final = true, e = tselElement(), t = App.tsel) {
+  if (!e || !t) return;
+  if (e.type === 'text') e.props.text = value;
+  else {
+    const ts = getPath(e, t.p); if (!ts) return;
+    ts.txt = ts.txt || {};
+    if (value === t.orig) delete ts.txt[t.key]; else ts.txt[t.key] = value;
+    if (!Object.keys(ts.txt).length) delete ts.txt;
+  }
+  commit('Edit text', final ? 0 : 450);
+}
+export function isTextOverridden(e = tselElement(), t = App.tsel) {
+  if (!e || !t || e.type === 'text') return false;
+  const ts = getPath(e, t.p); return !!(ts && ts.txt && t.key in ts.txt);
+}
 export function addElement(type, over = {}, opts = {}) {
   const doc = App.doc;
   const env = makeEnv(doc);
@@ -130,7 +160,7 @@ export function deleteSelected() {
   doc.elements = doc.elements.filter((e) => !removed.includes(e));
   for (const e of removed) doc.trash.unshift({ el: e, at: Date.now() });
   doc.trash = doc.trash.slice(0, 80);
-  App.sel = [];
+  App.sel = []; App.tsel = null;
   commit('Delete');
 }
 export function restoreTrash(i) {
@@ -175,6 +205,7 @@ function restore(s) {
   const d = JSON.parse(s);
   App.docs[App.mode] = d;
   App.sel = App.sel.filter((id) => d.elements.some((e) => e.id === id));
+  if (App.tsel && !App.sel.includes(App.tsel.id)) App.tsel = null;
   layoutAll(); emit('doc'); emit('sel');
 }
 export function undo() { const h = App.hist[App.mode]; if (h.idx > 0) { h.idx--; restore(h.stack[h.idx]); } }

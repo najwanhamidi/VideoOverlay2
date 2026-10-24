@@ -1,10 +1,12 @@
 // Workspace: canvas rendering, zoom/pan, selection, move/resize/rotate, snapping, marquee.
-import { App, on, emit, makeEnv, byId, selected, setSel, commit, layoutAll } from './state.js';
-import { REG, renderScene } from '../widgets/core.js';
+import { App, on, emit, makeEnv, byId, selected, setSel, commit, layoutAll, setTextSel, currentText, setTextOverride, tselStyle } from './state.js';
+import { REG, renderScene, textHits, hitContains, hitCorners } from '../widgets/core.js';
+import { fontStr } from '../render/draw.js';
 import { rad, clamp } from '../util.js';
 
 const $ = (s) => document.querySelector(s);
-export const view = { zoom: 0.3, fit: true, hover: null };
+export const view = { zoom: 0.3, fit: true, hover: null, hoverText: null };
+let selHits = [], inlineEd = null;
 let canvas, ctx, stageEl, scrollEl, overlay, selBox, marqueeEl, guideEls = [], toolbarEl;
 let needRender = true;
 
@@ -83,7 +85,23 @@ function render() {
   const outline = (el, color, dash) => { ctx.save(); ctx.strokeStyle = color; ctx.setLineDash(dash); ctx.translate(el.x + el.w / 2, el.y + el.h / 2); ctx.rotate(rad(el.rot)); ctx.strokeRect(-el.w / 2, -el.h / 2, el.w, el.h); ctx.restore(); };
   if (view.hover && !App.sel.includes(view.hover) && !App.playing) { const h = byId(view.hover); if (h) outline(h, '#5ee7ff', []); }
   if (App.sel.length > 1) for (const el of selected()) outline(el, '#c6ff3d', [6 / z, 4 / z]);
+  // text parts of the selected widget
+  selHits = [];
+  const one = App.sel.length === 1 && !App.playing ? byId(App.sel[0]) : null;
+  if (one) {
+    selHits = textHits(one, env);
+    const quad = (h, color, dash, w) => { const c = hitCorners(h); ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = w / z; ctx.setLineDash(dash); ctx.beginPath(); c.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.closePath(); ctx.stroke(); ctx.restore(); };
+    const ts = App.tsel && App.tsel.id === one.id ? App.tsel : null;
+    if (ts) {
+      const same = selHits.filter((h) => h.p === ts.p && (ts.single || h.key === ts.key || App.tselScope === 'all'));
+      for (const h of same) if (!(h.n === ts.n)) quad(h, 'rgba(255,77,141,.55)', [4 / z, 3 / z], 1.2);
+      const cur = findHit(ts);
+      if (cur) quad(cur, '#ff4d8d', [], 2.2);
+    }
+    if (view.hoverText != null && selHits[view.hoverText] && !(ts && findHit(ts) === selHits[view.hoverText])) quad(selHits[view.hoverText], '#5ee7ff', [3 / z, 3 / z], 1.2);
+  }
   ctx.restore();
+  positionInline();
   updateSelBox();
 }
 
@@ -109,6 +127,69 @@ function hitTest(p) {
     if (Math.abs(lx) <= el.w / 2 + tol && Math.abs(ly) <= el.h / 2 + tol) return el;
   }
   return null;
+}
+function findHit(t, hits = selHits) { return hits.find((h) => h.p === t.p && h.n === t.n) || hits.find((h) => h.p === t.p && h.key === t.key) || null; }
+function textAt(el, p, hits) {
+  hits = hits || textHits(el, makeEnv(App.doc, { time: App.time }));
+  const tol = 4 / view.zoom;
+  let best = null, bi = -1;
+  hits.forEach((h, i) => { if (hitContains(h, p.x, p.y, tol)) { const a = h.w * h.h * (h.m.a * h.m.a + h.m.b * h.m.b); if (!best || a < best.a) { best = { h, a }; bi = i; } } });
+  return best ? { h: best.h, i: bi } : null;
+}
+function tselFrom(el, h) { return { id: el.id, p: h.p, key: h.key, n: h.n, orig: h.orig, shown: h.shown, single: h.single }; }
+// Tap on an already-selected widget: pick the text part under the pointer (tap again = type on canvas).
+function tapText(el, p) {
+  const r = textAt(el, p);
+  if (!r) { if (App.tsel) setTextSel(null); return false; }
+  const t = tselFrom(el, r.h);
+  if (App.tsel && App.tsel.id === el.id && App.tsel.p === t.p && App.tsel.n === t.n) { openInlineEditor(); return true; }
+  setTextSel(t);
+  return true;
+}
+export function openInlineEditor() {
+  const el = App.tsel && byId(App.tsel.id); if (!el || el.locked) return;
+  if (inlineEd) inlineEd.ed.blur();
+  const multi = el.type === 'text' || /\n/.test(currentText());
+  const ed = document.createElement(multi ? 'textarea' : 'input');
+  ed.className = 'inline-edit'; ed.value = currentText(); ed.spellcheck = false; ed.setAttribute('enterkeyhint', 'done');
+  if (multi) ed.rows = 1;
+  const ts = tselStyle() || {};
+  const start = ed.value;
+  inlineEd = { ed, start, id: el.id };
+  const finish = (ok) => {
+    if (!inlineEd || inlineEd.ed !== ed) return;
+    inlineEd = null; ed.remove();
+    if (!ok) setTextOverride(start, true); else if (ed.value !== start) setTextOverride(ed.value, true);
+    emit('rebuild'); requestRender();
+  };
+  ed.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+    else if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); finish(true); }
+  });
+  ed.addEventListener('input', () => { setTextOverride(ed.value, false); fitInline(); });
+  ed.addEventListener('blur', () => finish(true));
+  ed.addEventListener('pointerdown', (e) => e.stopPropagation());
+  inlineEd.font = ts;
+  overlay.append(ed);
+  positionInline();
+  ed.focus(); ed.select();
+}
+export function closeInlineEditor() { if (inlineEd) { const { ed } = inlineEd; inlineEd = null; ed.remove(); } }
+function fitInline() { if (!inlineEd) return; const ed = inlineEd.ed; ed.style.width = '0px'; ed.style.width = Math.max(inlineEd.minW || 60, ed.scrollWidth + 12) + 'px'; if (ed.tagName === 'TEXTAREA') { ed.style.height = '0px'; ed.style.height = ed.scrollHeight + 4 + 'px'; } }
+function positionInline() {
+  if (!inlineEd) return;
+  const el = byId(inlineEd.id); if (!el || !App.tsel) { closeInlineEditor(); return; }
+  const z = view.zoom, h = findHit(App.tsel);
+  let x, y, w, ht, k = 1;
+  if (h) { const c = hitCorners(h); x = Math.min(...c.map((p) => p.x)); y = Math.min(...c.map((p) => p.y)); w = Math.max(...c.map((p) => p.x)) - x; ht = Math.max(...c.map((p) => p.y)) - y; k = Math.hypot(h.m.a, h.m.b); }
+  else { x = el.x; y = el.y; w = el.w; ht = el.h; }
+  const ts = inlineEd.font || {};
+  const ed = inlineEd.ed;
+  const fs = Math.max(13, Math.min(64, (ts.size || 40) * k * z));
+  Object.assign(ed.style, { left: x * z - 6 + 'px', top: y * z - 6 + 'px', minHeight: Math.max(fs * 1.35, ht * z) + 12 + 'px', font: fontStr({ ...ts, size: fs }), letterSpacing: (ts.spacing || 0) * k * z + 'px' });
+  inlineEd.minW = w * z + 12;
+  fitInline();
 }
 function groupMates(el) { return el.group ? App.doc.elements.filter((e) => e.group === el.group).map((e) => e.id) : [el.id]; }
 
@@ -142,6 +223,7 @@ function updateSelBox() {
   toolbarEl.querySelector('[data-act=group]').classList.toggle('hidden', !(sel.length > 1 && !(sel.every((e) => e.group && e.group === sel[0].group))));
   toolbarEl.querySelector('[data-act=ungroup]').classList.toggle('hidden', !sel.some((e) => e.group));
   toolbarEl.querySelector('[data-act=lock]').classList.toggle('on', sel.every((e) => e.locked));
+  toolbarEl.querySelector('[data-act=edittext]').classList.toggle('hidden', !(App.tsel && single && App.tsel.id === sel[0].id));
 }
 
 // ---------- Snapping ----------
@@ -183,7 +265,12 @@ function bindPointer() {
   window.addEventListener('pointercancel', onUp);
   scrollEl.addEventListener('dblclick', (e) => {
     const p = toDoc(e.clientX, e.clientY), hit = hitTest(p);
-    if (hit) { setSel([hit.id]); emit('focus-text'); }
+    if (!hit) return;
+    if (!(App.sel.length === 1 && App.sel[0] === hit.id)) setSel([hit.id]);
+    if (inlineEd) return;
+    const r = textAt(hit, p);
+    if (r) { const t = tselFrom(hit, r.h); if (!(App.tsel && App.tsel.p === t.p && App.tsel.n === t.n)) setTextSel(t); openInlineEditor(); }
+    else emit('focus-text');
   });
   scrollEl.addEventListener('contextmenu', (e) => { if (hitTest(toDoc(e.clientX, e.clientY))) e.preventDefault(); });
 }
@@ -211,9 +298,12 @@ function onDown(e) {
     const mates = e.altKey ? [hit.id] : groupMates(hit);
     if (additive) { if (ids.includes(hit.id)) ids = ids.filter((id) => !mates.includes(id)); else ids.push(...mates); setSel(ids); }
     else if (!ids.includes(hit.id)) setSel(mates);
+    const wasSel = !additive && ids.includes(hit.id);
+    const textTap = wasSel && ids.length === 1;
+    const drill = wasSel && ids.length > 1 && !e.altKey && ids.every((id) => mates.includes(id)) ? hit.id : null;
     const moving = selected().filter((x) => !x.locked);
-    if (!moving.length) return;
-    op = { kind: 'move', p0: p, start: moving.map((x) => ({ id: x.id, x: x.x, y: x.y })), b0: selBounds(moving), moved: false, pid: e.pointerId };
+    if (!moving.length) { if (textTap) op = { kind: 'move', p0: p, start: [], b0: selBounds(selected()), moved: false, textTap, hitId: hit.id }; return; }
+    op = { kind: 'move', p0: p, start: moving.map((x) => ({ id: x.id, x: x.x, y: x.y })), b0: selBounds(moving), moved: false, pid: e.pointerId, textTap, drill, hitId: hit.id };
   } else {
     if (!additive) setSel([]);
     if (e.pointerType === 'touch') { op = { kind: 'pan', sx: e.clientX, sy: e.clientY, sl: scrollEl.scrollLeft, st: scrollEl.scrollTop, tap: true }; return; }
@@ -242,8 +332,12 @@ function onMove(e) {
   }
   if (!op) {
     if (e.pointerType === 'mouse' && e.target.closest && e.target.closest('#stage-scroll')) {
-      const hit = hitTest(toDoc(e.clientX, e.clientY)); const id = hit ? hit.id : null;
+      const dp = toDoc(e.clientX, e.clientY);
+      const hit = hitTest(dp); const id = hit ? hit.id : null;
       if (id !== view.hover) { view.hover = id; requestRender(); }
+      let ht = null;
+      if (hit && App.sel.length === 1 && App.sel[0] === hit.id && selHits.length) { const r = textAt(hit, dp, selHits); ht = r ? r.i : null; }
+      if (ht !== view.hoverText) { view.hoverText = ht; scrollEl.classList.toggle('text-hover', ht != null); requestRender(); }
     }
     return;
   }
@@ -342,6 +436,11 @@ function onUp(e) {
   const k = op.kind;
   if (k === 'pan' && op.tap) setSel([]);
   if (k === 'move' && op.moved) commit('Move');
+  if (k === 'move' && !op.moved) {
+    const p = toDoc(e.clientX, e.clientY);
+    if (op.drill) setSel([op.drill]);
+    else if (op.textTap) { const el = byId(op.hitId); if (el) tapText(el, p); }
+  }
   if (k === 'rotate') commit('Rotate');
   if (k === 'resize1' || k === 'resizeN') { commit('Resize'); }
   if (k === 'marquee') marqueeEl.style.display = 'none';

@@ -20,12 +20,27 @@ export function isTS(o) { return o && typeof o === 'object' && 'font' in o && 's
 export function fontStr(ts, k = 1) {
   return `${ts.italic ? 'italic ' : ''}${ts.weight || 400} ${Math.max(1, ts.size * k)}px "${ts.font}", "Inter", system-ui, sans-serif`;
 }
-export function applyTransform(str, ts) {
-  str = str == null ? '' : String(str);
+function caseT(str, ts) {
   if (ts.transform === 'upper') return str.toUpperCase();
   if (ts.transform === 'lower') return str.toLowerCase();
   if (ts.transform === 'title') return str.replace(/\w\S*/g, (w) => w[0].toUpperCase() + w.slice(1).toLowerCase());
   return str;
+}
+// Per-text overrides stored on a text style: ts.txt = { '*': text } (the only text drawn with this style)
+// or { '=<original>': text } (one of several); ts.per = { '=<original>': {style overrides} }.
+export function textKey(str, ts) { return ts.txt && '*' in ts.txt ? '*' : '=' + str; }
+export function resolveText(str, ts) {
+  str = str == null ? '' : String(str);
+  if (ts.__raw || (!ts.txt && !ts.per)) return [str, ts];
+  const k = textKey(str, ts);
+  let s = str, t = ts;
+  if (ts.txt && k in ts.txt) s = String(ts.txt[k]);
+  if (ts.per && ts.per[k]) t = { ...ts, ...ts.per[k] };
+  return [s, { ...t, __raw: true }];
+}
+export function applyTransform(str, ts) {
+  const [s, t] = resolveText(str, ts);
+  return caseT(s, t);
 }
 const capCache = new Map();
 export function capRatio(ctx, ts) {
@@ -42,19 +57,21 @@ export function capRatio(ctx, ts) {
 export function clearFontCache() { capCache.clear(); }
 
 export function measureStr(ctx, str, ts) {
-  ctx.font = fontStr(ts);
-  str = applyTransform(str, ts);
-  if (!ts.spacing) return ctx.measureText(str).width;
+  const [s0, t] = resolveText(str, ts);
+  ctx.font = fontStr(t);
+  str = caseT(s0, t);
+  if (!t.spacing) return ctx.measureText(str).width;
   let w = 0; const chars = Array.from(str);
   for (const ch of chars) w += ctx.measureText(ch).width;
-  return w + ts.spacing * Math.max(0, chars.length - 1);
+  return w + t.spacing * Math.max(0, chars.length - 1);
 }
 // Box of a single line: w, asc (cap height), desc
 export function textBox(ctx, str, ts) {
-  const s = applyTransform(str, ts);
-  const w = measureStr(ctx, s, { ...ts, transform: 'none' });
-  const asc = capRatio(ctx, ts) * ts.size;
-  const desc = ts.size * (/[gjpqyQ,;()\[\]{}|/]/.test(s) ? 0.22 : 0.04);
+  const [s0, t] = resolveText(str, ts);
+  const s = caseT(s0, t);
+  const w = measureStr(ctx, s, { ...t, transform: 'none', __raw: true });
+  const asc = capRatio(ctx, t) * t.size;
+  const desc = t.size * (/[gjpqyQ,;()\[\]{}|/]/.test(s) ? 0.22 : 0.04);
   return { w, asc, desc, h: asc + desc };
 }
 // multi-line block
@@ -76,17 +93,24 @@ function rawText(ctx, str, x, y, ts, mode) {
   }
 }
 // Draw a single line with baseline at y. align relative to x.
-export function drawText(ctx, str, x, y, ts, env, align = 'left') {
-  const s = applyTransform(str, ts);
-  if (!s) return 0;
+export function drawText(ctx, str, x, y, ts0, env, align = 'left') {
+  const orig = str == null ? '' : String(str);
+  const [s0, ts] = resolveText(orig, ts0);
+  const s = caseT(s0, ts);
   ctx.save();
   ctx.font = fontStr(ts);
   ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'left';
-  const w = measureStr(ctx, s, { ...ts, transform: 'none' });
+  const w = s ? measureStr(ctx, s, { ...ts, transform: 'none', __raw: true }) : 0;
   let x0 = align === 'center' ? x - w / 2 : align === 'right' ? x - w : x;
-  ctx.globalAlpha *= ts.opacity ?? 1;
   const asc = capRatio(ctx, ts) * ts.size;
+  if (env && env.hits && ts0.__p && !ts0.__raw) {
+    const mw = Math.max(w, ts.size * 0.6);
+    const hx = align === 'center' ? x - mw / 2 : align === 'right' ? x - mw : x;
+    env.hits.push({ p: ts0.__p, orig, shown: s0, m: ctx.getTransform(), x: hx, y: y - asc - ts.size * 0.12, w: mw, h: asc + ts.size * 0.3 });
+  }
+  if (!s) { ctx.restore(); return 0; }
+  ctx.globalAlpha *= ts.opacity ?? 1;
   let fill = col(ts.color, env);
   if (ts.fill === 'gradient') {
     const g = ctx.createLinearGradient(0, y - asc, 0, y + ts.size * 0.05);

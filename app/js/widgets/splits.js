@@ -171,7 +171,7 @@ function drawZones(ctx, el, W, H, env) {
   let top = 0;
   if (p.showTitle && p.title) { const tb = textBox(ctx, p.title, p.titleTS); drawText(ctx, p.title, 0, tb.asc, p.titleTS, env); top = tb.h + p.titleTS.size * 0.6; }
   const maxPct = Math.max(...Z.map((z) => z.pct), 0.01);
-  const val = (z) => [p.showTime ? fmtDuration(z.time) : '', p.showPct ? Math.round(z.pct * 100) + '%' : '', p.showRange ? `${z.min}-${z.max}` : ''].filter(Boolean).join('  ');
+  const val = (z) => [p.showTime ? fmtDuration(z.time) : '', p.showPct ? Math.floor(z.pct * 100 + 1e-6) + '%' : '', p.showRange ? `${z.min}-${z.max}` : ''].filter(Boolean).join('  ');
   const c = (i) => col(p.colors[i] || ZONE_COLORS[i], env);
   if (p.design === 'donut') {
     const R = Math.min(W * 0.45, (H - top) / 2) , cx = R, cy = top + (H - top) / 2, th = R * p.ring;
@@ -197,7 +197,7 @@ function drawZones(ctx, el, W, H, env) {
       ctx.fillStyle = col(p.trackColor, env); rrect(ctx, x, top, bw, ch, p.barRadius); ctx.fill();
       ctx.fillStyle = c(i); rrect(ctx, x, top + ch - h, bw, Math.max(h, 1), p.barRadius); ctx.fill();
       drawText(ctx, p.names[i].split(' ')[0], i * cw + cw / 2, top + ch + p.labelTS.size * 1.2, p.labelTS, env, 'center');
-      drawText(ctx, p.showPct ? Math.round(z.pct * 100) + '%' : fmtDuration(z.time), i * cw + cw / 2, top + ch + p.labelTS.size * 1.2 + p.valueTS.size * 1.3, p.valueTS, env, 'center');
+      drawText(ctx, p.showPct ? Math.floor(z.pct * 100 + 1e-6) + '%' : fmtDuration(z.time), i * cw + cw / 2, top + ch + p.labelTS.size * 1.2 + p.valueTS.size * 1.3, p.valueTS, env, 'center');
     });
     return;
   }
@@ -240,7 +240,7 @@ register({
       const R = Math.min(W, H) / 2 - th / 2, cx = W / 2, cy = H / 2;
       ctx.save(); ctx.lineWidth = th; ctx.lineCap = 'round'; ctx.strokeStyle = tr; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
       ctx.strokeStyle = c; ctx.beginPath(); ctx.arc(cx, cy, R, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * frac); ctx.stroke(); ctx.restore();
-      const t = Math.round(frac * 100) + '%'; const tb = textBox(ctx, t, { ...p.labelTS, size: R * 0.5 });
+      const t = Math.floor(frac * 100 + 1e-6) + '%'; const tb = textBox(ctx, t, { ...p.labelTS, size: R * 0.5 });
       drawText(ctx, t, cx, cy + tb.asc / 2, { ...p.labelTS, size: R * 0.5 }, env, 'center');
       return;
     }

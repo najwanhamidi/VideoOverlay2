@@ -1,20 +1,20 @@
 // Properties panel (selected element(s)) and canvas settings panel.
-import { App, on, emit, commit, selected, makeEnv, layoutAll, addAsset, THEMES, SIZES, videoLength, duplicateSelected, deleteSelected } from './state.js';
+import { App, on, emit, commit, selected, makeEnv, layoutAll, addAsset, THEMES, SIZES, videoLength, duplicateSelected, deleteSelected, setTextSel, currentText, setTextOverride, isTextOverridden } from './state.js';
 import { REG, SKINS, ENTRANCES, applySkin, forEachTS, layoutElement, drawElement, boxOf } from '../widgets/core.js';
 import { el, getPath, setPath, clone, readFileAs, EASE } from '../util.js';
 import { section, row, textInput, textArea, numInput, range, select, seg, toggle, button, colorInput, fontSelect, weightsFor, iconPicker, emojiPicker, toast } from './ui.js';
 import { metricsFor } from '../widgets/metrics.js';
-import { fitZoom, requestRender } from './stage.js';
+import { fitZoom, requestRender, openInlineEditor } from './stage.js';
 import { arrange, alignSel, groupSel, ungroupSel } from './actions.js';
 import { clearFontCache } from '../render/draw.js';
 
-let root, rebuildPending = false, selfChange = false;
+let root, rebuildPending = false, selfChange = false, lastTsel = '';
 const controls = []; // {path, ctl, get}
 
 export function initPanels() {
   root = document.querySelector('#props');
   on((w) => {
-    if (w === 'sel' || w === 'mode' || w === 'rebuild') build();
+    if (w === 'sel' || w === 'mode' || w === 'rebuild') { const k = App.tsel ? App.tsel.id + App.tsel.p + App.tsel.n : ''; if (k !== lastTsel && k) { lastTsel = k; build(); root.scrollTop = 0; } else { lastTsel = k; build(); } }
     else if ((w === 'doc' || w === 'live' || w === 'doc-live') && !selfChange) refresh();
     else if (w === 'focus-text') { build(); const t = root.querySelector('textarea'); if (t) { t.focus(); t.select(); } }
   });
@@ -140,13 +140,14 @@ function itemsCtl(f, els) {
 }
 
 // ---------- Text style group ----------
-function tsFields(path, els, multiTS) {
-  // multiTS: apply to every text style in elements (group editing)
-  const first = multiTS ? firstTS(els) : getPath(els[0], path);
+function tsFields(path, els, multiTS, acc) {
+  // multiTS: apply to every text style in elements (group editing); acc: custom {first(), set(k, v, fin)}
+  const first = acc ? acc.first() : multiTS ? firstTS(els) : getPath(els[0], path);
   if (!first) return el('div');
-  const get = (k) => () => (multiTS ? firstTS(els)?.[k] : getPath(els[0], path + '.' + k));
+  const get = (k) => () => (acc ? acc.first()[k] : multiTS ? firstTS(els)?.[k] : getPath(els[0], path + '.' + k));
   const set = (k) => (v, fin) => {
-    if (multiTS) { for (const e of els) forEachTS(e, (ts) => { ts[k] = clone(v); }); selfChange = true; commit('Text style', fin ? 0 : 450); selfChange = false; if (k === 'font' || k === 'weight') ensureFontsLoaded(); }
+    if (acc) acc.set(k, v, fin);
+    else if (multiTS) { for (const e of els) forEachTS(e, (ts) => { ts[k] = clone(v); }); selfChange = true; commit('Text style', fin ? 0 : 450); selfChange = false; if (k === 'font' || k === 'weight') ensureFontsLoaded(); }
     else apply(els, path + '.' + k, v, fin, 'Text style');
     if (fin && (k === 'font' || k === 'fill' || k === 'shadow' || k === 'stroke')) scheduleRebuild();
   };
@@ -159,7 +160,7 @@ function tsFields(path, els, multiTS) {
     row('Weight', C('weight', select(first.weight, wOpts, (v, f) => set('weight')(+v, f))), { half: true }),
     row('Italic', C('italic', toggle(first.italic, set('italic'))), { half: true }),
   );
-  if (multiTS) {
+  if (multiTS && !acc) {
     box.append(row('Size', el('div', { class: 'btnrow' }, button('A−', () => scaleText(els, 0.9), 'small'), button('A+', () => scaleText(els, 1.1), 'small'))));
   } else box.append(row('Size', C('size', range(first.size, set('size'), { min: 6, max: 400, step: 1 }))));
   box.append(
@@ -187,6 +188,47 @@ function tsFields(path, els, multiTS) {
 function firstTS(els) { let r = null; for (const e of els) { forEachTS(e, (ts) => { if (!r) r = ts; }); if (r) break; } return r; }
 function scaleText(els, k) { for (const e of els) forEachTS(e, (ts) => { ts.size = Math.max(4, Math.round(ts.size * k * 10) / 10); }); commit('Text size'); }
 function countTS(els) { let n = 0; for (const e of els) forEachTS(e, () => n++); return n; }
+
+// ---------- Selected text (second tap on a widget) ----------
+function styleTitle(e, p, env) {
+  const def = REG[e.type];
+  try { for (const s of def.schema ? def.schema(e, env) : []) if (s.ts === p) return s.title.replace(/ text$/i, ''); } catch (err) { /* ignore */ }
+  return p.split('.').pop().replace(/TS$/, '');
+}
+function textSelSec(e, env) {
+  const t = App.tsel, ts = getPath(e, t.p);
+  if (!ts) return null;
+  const box = el('div', { class: 'tsel-sec' });
+  const name = styleTitle(e, t.p, env);
+  box.append(el('div', { class: 'tsel-head' }, el('b', {}, '✎ Selected text'), el('span', { class: 'pill' }, name), button('Done', () => setTextSel(null), 'tiny ghost')));
+  const isText = e.type === 'text';
+  const inp = isText || /\n/.test(currentText()) ? textArea(currentText(), (v, fin) => { selfChange = true; setTextOverride(v, fin); selfChange = false; }, { rows: 2 })
+    : textInput(currentText(), (v, fin) => { selfChange = true; setTextOverride(v, fin); selfChange = false; if (fin) scheduleRebuild(); });
+  inp.classList.add('tsel-input');
+  controls.push({ ctl: inp, get: () => currentText() });
+  box.append(row('Text', inp, { stack: true }));
+  if (!isText) {
+    const btns = el('div', { class: 'btnrow' }, button('Type on canvas', () => openInlineEditor(), 'small'));
+    if (isTextOverridden()) btns.append(button('Reset to data', () => { setTextOverride(t.orig, true); scheduleRebuild(); }, 'small'));
+    box.append(btns);
+    box.append(el('div', { class: 'tsel-orig' }, isTextOverridden() ? `Original: “${t.orig}”. Custom text stays fixed during the video.` : t.single ? 'Shows live data. Type to replace it with your own text.' : `Shows live data. Identical “${t.orig}” text in this widget changes together.`));
+  } else box.append(el('div', { class: 'tsel-orig' }, 'Data tokens like {distance} still work.'));
+  // style scope
+  let acc = null;
+  if (!t.single && !isText) {
+    box.append(row('Style applies to', seg(App.tselScope, [['one', 'This text only'], ['all', `All “${name}” text`]], (v) => { App.tselScope = v; requestRender(); scheduleRebuild(); })));
+    if (App.tselScope === 'one') {
+      const k = t.key;
+      acc = {
+        first: () => ({ ...ts, ...((ts.per && ts.per[k]) || {}) }),
+        set: (key, v, fin) => { ts.per = ts.per || {}; ts.per[k] = ts.per[k] || {}; ts.per[k][key] = clone(v); selfChange = true; commit('Text style', fin ? 0 : 450); selfChange = false; if (key === 'font' || key === 'weight') ensureFontsLoaded(); },
+      };
+      if (ts.per && ts.per[k]) box.append(row('', button('Reset this text\'s style', () => { delete ts.per[k]; if (!Object.keys(ts.per).length) delete ts.per; commit('Text style'); scheduleRebuild(); }, 'small')));
+    }
+  }
+  box.append(tsFields(t.p, [e], false, acc));
+  return box;
+}
 
 // ---------- Common sections ----------
 function transformSec(els) {
@@ -314,6 +356,8 @@ function build() {
     el('span', { class: 'tag' }, sameType ? def.name : 'Mixed'),
   );
   root.append(head);
+  if (App.tsel && els.length === 1 && App.tsel.id === els[0].id) { const ts = textSelSec(els[0], env); if (ts) root.append(ts); }
+  else if (els.length === 1) root.append(el('div', { class: 'help tip' }, 'Tip: tap any text in the selected widget to edit just that text. Tap it again (or double-click) to type.'));
   root.append(el('div', { class: 'btnrow quick' },
     button('Duplicate', () => duplicateSelected(), 'small'), button('Delete', () => deleteSelected(), 'small danger'),
     els.length > 1 && !els.every((e) => e.group && e.group === els[0].group) ? button('Group', groupSel, 'small') : null,

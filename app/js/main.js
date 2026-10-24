@@ -1,7 +1,7 @@
 // App bootstrap: wiring, keyboard shortcuts, autosave, project files.
 import './widgets/index.js';
-import { App, on, emit, commit, undo, redo, canUndo, canRedo, setSel, selected, deleteSelected, duplicateSelected, resetHistory, layoutAll, newDoc, addAsset, addElement, usedAssets, invalidateMulti } from './editor/state.js';
-import { initStage, fitZoom, setZoom, view, nudge, requestRender } from './editor/stage.js';
+import { App, on, emit, commit, undo, redo, canUndo, canRedo, setSel, selected, deleteSelected, duplicateSelected, resetHistory, layoutAll, newDoc, addAsset, addElement, usedAssets, invalidateMulti, setTextSel } from './editor/state.js';
+import { initStage, fitZoom, setZoom, view, nudge, requestRender, openInlineEditor } from './editor/stage.js';
 import { initPanels, ensureFontsLoaded } from './editor/panels.js';
 import { initSidebar, showTab, handleFiles, applyTemplate } from './editor/sidebar.js';
 import { initTimeline, togglePlay, pause } from './editor/timeline.js';
@@ -67,6 +67,7 @@ function wireTop() {
     else if (a === 'group') groupSel(); else if (a === 'ungroup') ungroupSel();
     else if (a === 'lock') { const s = selected(); const l = !s.every((e) => e.locked); s.forEach((e) => (e.locked = l)); commit(l ? 'Lock' : 'Unlock'); emit('sel'); }
     else if (a === 'edit') openSheet('props');
+    else if (a === 'edittext') openInlineEditor();
   }));
 }
 
@@ -90,7 +91,8 @@ function wireKeys() {
     if (mod && k === '-') { e.preventDefault(); setZoom(view.zoom / 1.2); return; }
     if (mod && k === '0') { e.preventDefault(); fitZoom(); return; }
     if (k === 'delete' || k === 'backspace') { if (App.sel.length) { e.preventDefault(); deleteSelected(); } return; }
-    if (k === 'escape') { setSel([]); return; }
+    if (k === 'escape') { if (App.tsel) setTextSel(null); else setSel([]); return; }
+    if (k === 'enter' && App.tsel) { e.preventDefault(); openInlineEditor(); return; }
     if (k === '[') { arrange(e.shiftKey ? 'back' : 'down'); return; }
     if (k === ']') { arrange(e.shiftKey ? 'front' : 'up'); return; }
     if (e.key.startsWith('Arrow') && App.sel.length) {

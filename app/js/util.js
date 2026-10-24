@@ -41,9 +41,16 @@ export function paceUnit(units) { return units === 'imperial' ? '/mi' : '/km'; }
 export function elevUnit(units) { return units === 'imperial' ? 'ft' : 'm'; }
 export function speedUnit(units) { return units === 'imperial' ? 'mph' : 'km/h'; }
 
+// Displayed data is always rounded DOWN (truncated), never up: 10.299 km shows 10.29, 5:33.9 /km shows 5:33.
+export function floorDec(v, dec = 0) {
+  if (!isNum(v)) return v;
+  const f = Math.pow(10, Math.max(0, dec)), e = 1e-6;
+  return v < 0 ? -Math.floor(-v * f + e) / f : Math.floor(v * f + e) / f;
+}
+export function toFixedDown(v, dec = 0) { return floorDec(v, dec).toFixed(Math.max(0, dec)); }
 export function fmtDuration(sec, style = 'auto') {
   if (!isNum(sec)) return '--:--';
-  sec = Math.max(0, Math.round(sec));
+  sec = Math.max(0, floorDec(sec));
   const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
   const p = (n) => String(n).padStart(2, '0');
   if (style === 'hms' || (style === 'auto' && h > 0)) return `${h}:${p(m)}:${p(s)}`;
@@ -55,23 +62,23 @@ export function fmtDuration(sec, style = 'auto') {
 export function fmtPace(secPerKm, units) {
   if (!isNum(secPerKm) || secPerKm <= 0 || secPerKm > 3600) return '--:--';
   let s = units === 'imperial' ? secPerKm * (MI / KM) : secPerKm;
-  s = Math.round(s);
+  s = floorDec(s);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 export function fmtDist(m, units, dec = 2) {
   if (!isNum(m)) return '--';
-  return (m / unitLen(units)).toFixed(dec);
+  return toFixedDown(m / unitLen(units), dec);
 }
 export function fmtElev(m, units) {
   if (!isNum(m)) return '--';
-  return Math.round(units === 'imperial' ? m / FT : m).toString();
+  return floorDec(units === 'imperial' ? m / FT : m).toString();
 }
 export function fmtSpeed(mps, units) {
   if (!isNum(mps)) return '--';
-  return (units === 'imperial' ? mps * 2.236936 : mps * 3.6).toFixed(1);
+  return toFixedDown(units === 'imperial' ? mps * 2.236936 : mps * 3.6, 1);
 }
-export function fmtInt(v) { return isNum(v) ? Math.round(v).toString() : '--'; }
-export function fmtNum(v, dec = 1) { return isNum(v) ? v.toFixed(dec) : '--'; }
+export function fmtInt(v) { return isNum(v) ? floorDec(v).toString() : '--'; }
+export function fmtNum(v, dec = 1) { return isNum(v) ? toFixedDown(v, dec) : '--'; }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const MONTHS_L = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];

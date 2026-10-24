@@ -21,13 +21,16 @@ Make Instagram/TikTok-ready running overlays and animated videos from your own a
 - Text (with data tokens like `{distance}`, `{avgPace}`, `{name}`), images, icon/emoji/badge stickers, shapes.
 
 **Editing**
+- **Edit any single text inside a widget:** tap/click a widget to select it, then tap any text in it (value, label, unit, a table cell, a graph title…) to select just that text. Change its words and its style (font, size, colour, outline, shadow…) on its own. Tap it again, double-click it, or press Enter to type straight on the canvas. *Reset to data* brings back the original value.
 - Drag to move, handles to resize and rotate — single items, multi-selection (Shift/Ctrl-click or drag a box) or groups (Ctrl+G).
 - Arrow keys nudge (Shift = 10 px, or grid size when snapping). Snap to grid with adjustable size, plus smart alignment guides.
 - Every text part (value, label, unit, headers…) can be styled individually: font (32 built in + upload your own), weight, size, colour/gradient, letter spacing, line height, case, outline, shadow/glow, opacity. Or edit all text of a widget, a selection or the whole canvas at once.
 - Every widget: backdrop (none/solid/gradient), opacity, corner radius, padding, border (style/sides), drop shadow, blend mode, flip, rotation.
 - Zoom (buttons, Ctrl+wheel, pinch), undo/redo, duplicate, copy/paste, layers panel (reorder, hide, lock, rename), Trash with restore.
 - Theme colours: elements using theme swatches recolour together.
-- Templates: 12 for single runs, 6 for multi-run; save your own designs as templates.
+- Templates: 24 for single runs, 13 for multi-run; save your own designs as templates.
+
+**Numbers** are always rounded down (10.299 km shows 10.29, a 5:33.9 pace shows 5:33), never up.
 
 **Export**
 - Image: PNG / JPG / WebP at 0.5×–3×, background = transparent, solid, gradient or your photo (with fit, zoom, darken, blur).
@@ -48,6 +51,10 @@ Make Instagram/TikTok-ready running overlays and animated videos from your own a
 4. On GitHub: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
 5. The included workflow (`.github/workflows/pages.yml`) publishes `app/` on every push. Your app will be at `https://<you>.github.io/lari-studio/`.
 6. On your phone open that link and choose **Add to Home Screen** (iPhone: Share → Add to Home Screen; Android: ⋮ → Install app). Desktop Chrome/Edge can also install it from the address bar.
+
+## Versions
+- **v1.1** – edit individual text inside widgets, round-down numbers, 19 new templates.
+- **v1.0** – first release. Kept on the `v1` branch.
 
 ## Desktop app
 

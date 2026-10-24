@@ -1,6 +1,7 @@
 // Quick-start templates for single activities and multi-run periods.
 import { makeElement, layoutElement, REG } from '../widgets/core.js';
 import { deepMerge, clone } from '../util.js';
+import { MORE_SINGLE, MORE_MULTI } from './more.js';
 
 function kit(doc, env, ctx) {
   const W = doc.w, H = doc.h;
@@ -354,6 +355,9 @@ export const TEMPLATES = {
     },
   ],
 };
+
+TEMPLATES.single.push(...MORE_SINGLE);
+TEMPLATES.multi.push(...MORE_MULTI);
 
 // Build a template into a doc
 export function buildTemplate(tpl, doc, env, ctx) {

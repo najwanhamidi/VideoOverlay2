@@ -269,3 +269,13 @@ kbd { background: var(--bg); border: 1px solid var(--line2); border-bottom-width
   input, select, textarea { font-size: 16px; }
   .range input[type=number], .color .hex { font-size: 13px; }
 }
+/* individual text editing */
+.inline-edit { position: absolute; z-index: 6; padding: 4px 6px; margin: 0; border: 2px solid #ff4d8d; border-radius: 8px; background: rgba(13,15,20,.92); color: #fff; outline: none; resize: none; overflow: hidden; white-space: pre; line-height: 1.2; box-shadow: 0 8px 24px rgba(0,0,0,.5); pointer-events: auto; }
+.stage-scroll.text-hover { cursor: text; }
+.tsel-sec { border: 1px solid #ff4d8d66; border-radius: 12px; margin: 0 0 10px; padding: 10px; background: #ff4d8d0d; }
+.tsel-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.tsel-head b { flex: 1; font-size: 13px; }
+.tsel-head .pill { font-size: 11px; padding: 2px 8px; border-radius: 99px; background: #ff4d8d33; color: #ffb3cf; }
+.tsel-orig { font-size: 11px; color: var(--muted); margin: -2px 0 8px; }
+.seltools button.tedit { color: #ff8fb6; }
+.tsel-sec .btnrow { margin-top: 6px; }

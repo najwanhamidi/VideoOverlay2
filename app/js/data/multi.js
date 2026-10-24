@@ -58,6 +58,6 @@ export function multiStateAt(S, t) {
   return {
     ...S, t, shown,
     distance: S.distance * k, time: S.time * k, elapsed: S.elapsed * k, ascent: S.ascent * k, calories: S.calories * k,
-    runs: Math.round(S.runs * k), activeDays: Math.round(S.activeDays * k),
+    runs: Math.floor(S.runs * k + 1e-6), activeDays: Math.floor(S.activeDays * k + 1e-6),
   };
 }
